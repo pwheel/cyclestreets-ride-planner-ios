@@ -1,0 +1,15 @@
+# Xcode
+*.xcuserstate
+xcuserdata/
+DerivedData/
+*.xccheckout
+*.moved-aside
+*.pbxuser
+
+# Keys — never commit real keys
+Resources/APIKey_live.txt
+**/Resources/APIKey_live.txt
+
+# SPM
+.build/
+.swiftpm/
