@@ -1,0 +1,58 @@
+//
+//  MapViewModelTests.swift
+//  CycleStreets Ride PlannerTests
+//
+
+import Testing
+import Foundation
+import CoreLocation
+@testable import CycleStreets_Ride_Planner
+
+@MainActor
+final class MapViewModelTests {
+    let client: MockAPIClient
+    let vm: MapViewModel
+
+    init() {
+        client = MockAPIClient()
+        vm = MapViewModel(apiClient: client)
+    }
+
+    @Test func testSearchUpdatesPlaces() async throws {
+        client.placesToReturn = [
+            Place(id: "1", name: "Cambridge", near: "Cambridgeshire",
+                  coordinate: Coordinate(longitude: 0.1218, latitude: 52.2053))
+        ]
+        await vm.search(query: "Cambridge")
+        #expect(vm.searchResults.count == 1)
+        #expect(vm.searchResults[0].name == "Cambridge")
+    }
+
+    @Test func testPlanRoutePopulatesJourney() async throws {
+        let journey = client.makeJourney()
+        client.journeyToReturn = journey
+        let from = CLLocationCoordinate2D(latitude: 52.2054, longitude: 0.1132)
+        let to   = CLLocationCoordinate2D(latitude: 52.1952, longitude: 0.1201)
+        await vm.planRoute(from: from, to: to)
+        #expect(vm.currentJourney != nil)
+        #expect(vm.currentJourney?.number == journey.number)
+    }
+
+    @Test func testPlanRouteErrorSetsErrorMessage() async {
+        client.shouldThrow = URLError(.notConnectedToInternet)
+        let from = CLLocationCoordinate2D(latitude: 52.2054, longitude: 0.1132)
+        let to   = CLLocationCoordinate2D(latitude: 52.1952, longitude: 0.1201)
+        await vm.planRoute(from: from, to: to)
+        #expect(vm.errorMessage != nil)
+    }
+
+    @Test func testClearRouteResetsState() async {
+        client.journeyToReturn = client.makeJourney()
+        let c = CLLocationCoordinate2D(latitude: 52.2054, longitude: 0.1132)
+        await vm.planRoute(from: c, to: c)
+        vm.clearRoute()
+        #expect(vm.currentJourney == nil)
+        #expect(vm.fromPlace == nil)
+        #expect(vm.toPlace == nil)
+    }
+}
