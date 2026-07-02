@@ -39,6 +39,10 @@ struct ItineraryView: View {
             }
         }
         .navigationTitle("Itinerary")
-        // TODO: wire up GPXExportButton in Task 9
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                GPXExportButton(journeyID: journey.number)
+            }
+        }
     }
 }
