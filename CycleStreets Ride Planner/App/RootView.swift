@@ -19,8 +19,10 @@ struct RootView: View {
             }
             .tabItem { Label("Saved", systemImage: "bookmark") }
 
-            Text("Account")
-                .tabItem { Label("Account", systemImage: "person") }
+            NavigationStack {
+                AccountView(apiClient: apiClient)
+            }
+            .tabItem { Label("Account", systemImage: "person") }
         }
     }
 }
