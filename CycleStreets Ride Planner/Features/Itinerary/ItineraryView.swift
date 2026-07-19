@@ -41,7 +41,7 @@ struct ItineraryView: View {
         .navigationTitle("Itinerary")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                GPXExportButton(journeyID: journey.number)
+                GPXExportButton(journeyID: journey.number, plan: journey.plan)
             }
         }
     }

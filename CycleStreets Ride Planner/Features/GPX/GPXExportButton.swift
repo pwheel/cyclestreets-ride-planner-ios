@@ -2,6 +2,7 @@ import SwiftUI
 
 struct GPXExportButton: View {
     let journeyID: Int
+    let plan: RoutePlan
     @Environment(\.apiClient) private var apiClient
     @State private var isExporting = false
     @State private var exportedFileURL: URL?
@@ -34,7 +35,7 @@ struct GPXExportButton: View {
     private func export() async {
         isExporting = true
         do {
-            let data = try await apiClient.downloadGPX(journeyID: journeyID)
+            let data = try await apiClient.downloadGPX(journeyID: journeyID, plan: plan)
             let filename = "route_\(journeyID).gpx"
             let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
             try data.write(to: url)

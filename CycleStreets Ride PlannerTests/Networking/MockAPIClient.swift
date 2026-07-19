@@ -30,7 +30,7 @@ final class MockAPIClient: APIClientProtocol {
         return placesToReturn
     }
 
-    func downloadGPX(journeyID: Int) async throws -> Data {
+    func downloadGPX(journeyID: Int, plan: RoutePlan) async throws -> Data {
         try checkThrow()
         return gpxDataToReturn
     }

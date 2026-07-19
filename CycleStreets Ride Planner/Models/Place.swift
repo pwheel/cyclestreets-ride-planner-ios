@@ -19,11 +19,3 @@ struct Place: Codable, Identifiable, Equatable {
 
     var clCoordinate: CLLocationCoordinate2D { coordinate.clCoordinate }
 }
-
-struct PlaceSearchResponse: Decodable {
-    let results: PlaceResults
-}
-
-struct PlaceResults: Decodable {
-    let place: [Place]
-}

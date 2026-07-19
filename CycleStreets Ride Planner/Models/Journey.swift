@@ -77,7 +77,3 @@ struct Journey: Codable, Identifiable, Equatable {
         segments.flatMap(\.points).map(\.clCoordinate)
     }
 }
-
-struct JourneyResponse: Decodable {
-    let journey: Journey
-}
