@@ -32,6 +32,27 @@ enum Endpoints {
         return url
     }
 
+    /// Re-fetches a previously-planned journey by itinerary ID, optionally
+    /// for a different plan type. See "Switching between route types or
+    /// retrieving a previously-planned route" at
+    /// https://www.cyclestreets.net/api/v1/journey/
+    static func journeyReload(
+        itinerary: Int,
+        plan: RoutePlan,
+        apiKey: String
+    ) throws -> URL {
+        var c = URLComponents(string: "https://www.cyclestreets.net/api/journey.json")!
+        c.queryItems = [
+            .init(name: "key",          value: apiKey),
+            .init(name: "plan",         value: plan.rawValue),
+            .init(name: "itinerary",    value: "\(itinerary)"),
+            .init(name: "reporterrors", value: "1"),
+            .init(name: "segments",     value: "1"),
+        ]
+        guard let url = c.url else { throw URLError(.badURL) }
+        return url
+    }
+
     static func geocode(query: String, apiKey: String) throws -> URL {
         var c = URLComponents(string: "\(base)/geocoder")!
         c.queryItems = [

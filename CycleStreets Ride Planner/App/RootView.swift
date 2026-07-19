@@ -12,7 +12,7 @@ struct RootView: View {
 
             NavigationStack {
                 List {
-                    NavigationLink("Saved Routes") { SavedRoutesView() }
+                    NavigationLink("Saved Routes") { SavedRoutesView(apiClient: apiClient) }
                     NavigationLink("Saved Locations") { SavedLocationsView() }
                 }
                 .navigationTitle("Saved")

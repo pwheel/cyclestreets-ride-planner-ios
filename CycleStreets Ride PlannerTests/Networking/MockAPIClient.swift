@@ -34,6 +34,11 @@ final class MockAPIClient: APIClientProtocol {
         return gpxDataToReturn
     }
 
+    func reloadJourney(itineraryID: Int, plan: RoutePlan) async throws -> Journey {
+        try checkThrow()
+        return journeyToReturn ?? makeJourney(id: itineraryID, plan: plan)
+    }
+
     // MARK: - Helpers
 
     func makeJourney(id: Int = 1, plan: RoutePlan = .balanced) -> Journey {

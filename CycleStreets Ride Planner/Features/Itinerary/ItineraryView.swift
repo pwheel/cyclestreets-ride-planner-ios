@@ -7,11 +7,18 @@ import SwiftUI
 
 struct ItineraryView: View {
     let journey: Journey
+    let apiClient: any APIClientProtocol
     @AppStorage("useMetric") private var useMetric = true
-    @State private var savedRoutesVM = SavedRoutesViewModel()
+    @State private var savedRoutesVM: SavedRoutesViewModel
     @State private var isPresentingSaveAlert = false
     @State private var isPresentingSavedConfirmation = false
     @State private var routeName = ""
+
+    init(journey: Journey, apiClient: any APIClientProtocol) {
+        self.journey = journey
+        self.apiClient = apiClient
+        _savedRoutesVM = State(initialValue: SavedRoutesViewModel(apiClient: apiClient))
+    }
 
     private var vm: ItineraryViewModel {
         ItineraryViewModel(journey: journey, useMetric: useMetric)

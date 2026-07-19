@@ -36,7 +36,7 @@ struct MapView: View {
             if let journey = vm.currentJourney {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink("Itinerary") {
-                        ItineraryView(journey: journey)
+                        ItineraryView(journey: journey, apiClient: apiClient)
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
