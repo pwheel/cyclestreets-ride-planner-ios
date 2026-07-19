@@ -1,13 +1,13 @@
 import SwiftUI
 
 struct SavedRoutesView: View {
-    let apiClient: any APIClientProtocol
     @State private var vm: SavedRoutesViewModel
     @AppStorage("useMetric") private var useMetric = true
+    let onJourneyLoaded: (Journey) -> Void
 
-    init(apiClient: any APIClientProtocol) {
-        self.apiClient = apiClient
+    init(apiClient: any APIClientProtocol, onJourneyLoaded: @escaping (Journey) -> Void) {
         _vm = State(initialValue: SavedRoutesViewModel(apiClient: apiClient))
+        self.onJourneyLoaded = onJourneyLoaded
     }
 
     var body: some View {
@@ -43,13 +43,10 @@ struct SavedRoutesView: View {
         .overlay {
             if vm.isLoading { ProgressView().scaleEffect(1.5) }
         }
-        .navigationDestination(isPresented: Binding(
-            get: { vm.loadedJourney != nil },
-            set: { if !$0 { vm.loadedJourney = nil } }
-        )) {
-            if let journey = vm.loadedJourney {
-                ItineraryView(journey: journey, apiClient: apiClient)
-            }
+        .onChange(of: vm.loadedJourney) { _, newValue in
+            guard let journey = newValue else { return }
+            onJourneyLoaded(journey)
+            vm.loadedJourney = nil
         }
         .alert("Error", isPresented: Binding(
             get: { vm.errorMessage != nil },

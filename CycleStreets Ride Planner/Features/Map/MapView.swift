@@ -4,6 +4,7 @@ import MapKit
 struct MapView: View {
     @State private var vm: MapViewModel
     @Environment(\.apiClient) private var apiClient
+    @Binding var pendingJourney: Journey?
     @State private var searchText = ""
     @State private var selectingFor: WaypointRole = .from
     @State private var savedLocationsVM = SavedLocationsViewModel()
@@ -17,8 +18,9 @@ struct MapView: View {
 
     enum WaypointRole { case from, to }
 
-    init(apiClient: any APIClientProtocol) {
+    init(apiClient: any APIClientProtocol, pendingJourney: Binding<Journey?>) {
         _vm = State(initialValue: MapViewModel(apiClient: apiClient))
+        _pendingJourney = pendingJourney
     }
 
     var body: some View {
@@ -57,6 +59,19 @@ struct MapView: View {
         }
         .alert("Location Saved", isPresented: $isPresentingLocationSavedConfirmation) {
             Button("OK", role: .cancel) {}
+        }
+        .onChange(of: pendingJourney) { _, newValue in
+            guard let journey = newValue else { return }
+            vm.loadJourney(journey)
+            if let end = journey.allCoordinates.last {
+                withAnimation {
+                    position = .region(MKCoordinateRegion(
+                        center: end,
+                        span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                    ))
+                }
+            }
+            pendingJourney = nil
         }
     }
 

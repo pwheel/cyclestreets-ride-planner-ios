@@ -55,4 +55,32 @@ final class MapViewModelTests {
         #expect(vm.fromPlace == nil)
         #expect(vm.toPlace == nil)
     }
+
+    @Test func testLoadJourneySetsCurrentJourney() {
+        let journey = client.makeJourney()
+        vm.loadJourney(journey)
+        #expect(vm.currentJourney == journey)
+    }
+
+    @Test func testLoadJourneyDerivesFromAndToPlacesFromCoordinates() {
+        let journey = client.makeJourney()
+        let first = journey.allCoordinates.first!
+        let last = journey.allCoordinates.last!
+        vm.loadJourney(journey)
+        #expect(vm.fromPlace?.coordinate.longitude == first.longitude)
+        #expect(vm.fromPlace?.coordinate.latitude == first.latitude)
+        #expect(vm.toPlace?.coordinate.longitude == last.longitude)
+        #expect(vm.toPlace?.coordinate.latitude == last.latitude)
+    }
+
+    @Test func testLoadJourneyClearsSearchResultsAndError() {
+        client.placesToReturn = [
+            Place(id: "1", name: "Cambridge", near: nil, coordinate: Coordinate(longitude: 0, latitude: 0))
+        ]
+        vm.searchResults = client.placesToReturn
+        vm.errorMessage = "stale error"
+        vm.loadJourney(client.makeJourney())
+        #expect(vm.searchResults.isEmpty)
+        #expect(vm.errorMessage == nil)
+    }
 }
