@@ -12,7 +12,6 @@ protocol APIClientProtocol {
                      plan: RoutePlan) async throws -> Journey
     func geocode(query: String) async throws -> [Place]
     func downloadGPX(journeyID: Int, plan: RoutePlan) async throws -> Data
-    func login(username: String, password: String) async throws -> String
 }
 
 final class APIClient: APIClientProtocol {
@@ -42,15 +41,5 @@ final class APIClient: APIClientProtocol {
         let url = try Endpoints.gpxExport(journeyID: journeyID, plan: plan)
         let (data, _) = try await session.data(from: url)
         return data
-    }
-
-    func login(username: String, password: String) async throws -> String {
-        let url = try Endpoints.login(username: username, password: password, apiKey: apiKey)
-        let (data, _) = try await session.data(from: url)
-        struct AuthResponse: Decodable {
-            struct User: Decodable { let token: String }
-            let user: User
-        }
-        return try JSONDecoder().decode(AuthResponse.self, from: data).user.token
     }
 }

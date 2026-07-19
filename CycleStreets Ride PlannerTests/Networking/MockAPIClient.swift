@@ -11,7 +11,6 @@ final class MockAPIClient: APIClientProtocol {
     var journeyToReturn: Journey?
     var placesToReturn: [Place] = []
     var gpxDataToReturn = Data("gpx content".utf8)
-    var tokenToReturn = "mock_token"
     var shouldThrow: Error?
 
     private func checkThrow() throws {
@@ -33,11 +32,6 @@ final class MockAPIClient: APIClientProtocol {
     func downloadGPX(journeyID: Int, plan: RoutePlan) async throws -> Data {
         try checkThrow()
         return gpxDataToReturn
-    }
-
-    func login(username: String, password: String) async throws -> String {
-        try checkThrow()
-        return tokenToReturn
     }
 
     // MARK: - Helpers

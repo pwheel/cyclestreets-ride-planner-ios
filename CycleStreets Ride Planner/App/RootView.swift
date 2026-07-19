@@ -20,11 +20,6 @@ struct RootView: View {
             .tabItem { Label("Saved", systemImage: "bookmark") }
 
             NavigationStack {
-                AccountView(apiClient: apiClient)
-            }
-            .tabItem { Label("Account", systemImage: "person") }
-
-            NavigationStack {
                 SettingsView()
             }
             .tabItem { Label("Settings", systemImage: "gear") }

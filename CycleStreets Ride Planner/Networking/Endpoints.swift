@@ -52,16 +52,4 @@ enum Endpoints {
         guard let url = URL(string: string) else { throw URLError(.badURL) }
         return url
     }
-
-    static func login(username: String, password: String, apiKey: String) throws -> URL {
-        var c = URLComponents(string: "\(base)/user.authenticate")!
-        c.queryItems = [
-            .init(name: "key",      value: apiKey),
-            .init(name: "username", value: username),
-            .init(name: "password", value: password),
-            .init(name: "format",   value: "json"),
-        ]
-        guard let url = c.url else { throw URLError(.badURL) }
-        return url
-    }
 }
