@@ -5,6 +5,7 @@ struct MapView: View {
     @State private var vm: MapViewModel
     @Environment(\.apiClient) private var apiClient
     @Binding var pendingJourney: Journey?
+    @Binding var pendingPlaceSelection: PendingPlaceSelection?
     @State private var searchText = ""
     @State private var selectingFor: WaypointRole = .from
     @State private var savedLocationsVM = SavedLocationsViewModel()
@@ -16,11 +17,10 @@ struct MapView: View {
         )
     )
 
-    enum WaypointRole { case from, to }
-
-    init(apiClient: any APIClientProtocol, pendingJourney: Binding<Journey?>) {
+    init(apiClient: any APIClientProtocol, pendingJourney: Binding<Journey?>, pendingPlaceSelection: Binding<PendingPlaceSelection?>) {
         _vm = State(initialValue: MapViewModel(apiClient: apiClient))
         _pendingJourney = pendingJourney
+        _pendingPlaceSelection = pendingPlaceSelection
     }
 
     var body: some View {
@@ -72,6 +72,20 @@ struct MapView: View {
                 }
             }
             pendingJourney = nil
+        }
+        .onChange(of: pendingPlaceSelection) { _, newValue in
+            guard let selection = newValue else { return }
+            if selection.role == .from { selectingFor = .to }
+            withAnimation {
+                position = .region(MKCoordinateRegion(
+                    center: selection.place.clCoordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                ))
+            }
+            Task {
+                await vm.selectPlace(selection.place, as: selection.role)
+                pendingPlaceSelection = nil
+            }
         }
     }
 
@@ -149,20 +163,14 @@ struct MapView: View {
     private func selectPlace(_ place: Place) {
         searchText = ""
         vm.searchResults = []
-        if selectingFor == .from {
-            vm.fromPlace = place
-            selectingFor = .to
-        } else {
-            vm.toPlace = place
-        }
-        if let from = vm.fromPlace, let to = vm.toPlace {
-            Task { await vm.planRoute(from: from.clCoordinate, to: to.clCoordinate) }
-        }
+        let role = selectingFor
+        if role == .from { selectingFor = .to }
         withAnimation {
             position = .region(MKCoordinateRegion(
                 center: place.clCoordinate,
                 span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
             ))
         }
+        Task { await vm.selectPlace(place, as: role) }
     }
 }

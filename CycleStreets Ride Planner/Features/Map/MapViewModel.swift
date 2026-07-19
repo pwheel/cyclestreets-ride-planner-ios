@@ -7,6 +7,15 @@ import Foundation
 import CoreLocation
 import Observation
 
+enum WaypointRole: Equatable { case from, to }
+
+/// A place selected outside `MapView`'s own search flow (e.g. from
+/// Saved Locations), paired with which waypoint it should fill.
+struct PendingPlaceSelection: Equatable {
+    let place: Place
+    let role: WaypointRole
+}
+
 @Observable
 @MainActor
 final class MapViewModel {
@@ -68,6 +77,19 @@ final class MapViewModel {
         if let end = coordinates.last {
             toPlace = Place(id: UUID().uuidString, name: "End", near: nil,
                              coordinate: Coordinate(longitude: end.longitude, latitude: end.latitude))
+        }
+    }
+
+    /// Assigns a place to the given waypoint and, once both from and to
+    /// are set, plans the route — matching the behavior of picking a
+    /// place from search results.
+    func selectPlace(_ place: Place, as role: WaypointRole) async {
+        switch role {
+        case .from: fromPlace = place
+        case .to: toPlace = place
+        }
+        if let from = fromPlace, let to = toPlace {
+            await planRoute(from: from.clCoordinate, to: to.clCoordinate)
         }
     }
 }

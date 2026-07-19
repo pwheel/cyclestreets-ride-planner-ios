@@ -83,4 +83,23 @@ final class MapViewModelTests {
         #expect(vm.searchResults.isEmpty)
         #expect(vm.errorMessage == nil)
     }
+
+    @Test func testSelectPlaceAsFromOnlySetsFromPlace() async {
+        let place = Place(id: "1", name: "Home", near: nil, coordinate: Coordinate(longitude: 0.1, latitude: 52.0))
+        await vm.selectPlace(place, as: .from)
+        #expect(vm.fromPlace == place)
+        #expect(vm.toPlace == nil)
+        #expect(vm.currentJourney == nil)
+    }
+
+    @Test func testSelectPlaceAsToAfterFromTriggersPlanRoute() async {
+        let journey = client.makeJourney()
+        client.journeyToReturn = journey
+        let from = Place(id: "1", name: "Home", near: nil, coordinate: Coordinate(longitude: 0.1, latitude: 52.0))
+        let to = Place(id: "2", name: "Work", near: nil, coordinate: Coordinate(longitude: 0.2, latitude: 52.1))
+        await vm.selectPlace(from, as: .from)
+        await vm.selectPlace(to, as: .to)
+        #expect(vm.toPlace == to)
+        #expect(vm.currentJourney?.number == journey.number)
+    }
 }
