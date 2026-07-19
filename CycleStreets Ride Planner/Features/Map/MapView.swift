@@ -6,6 +6,8 @@ struct MapView: View {
     @Environment(\.apiClient) private var apiClient
     @State private var searchText = ""
     @State private var selectingFor: WaypointRole = .from
+    @State private var savedLocationsVM = SavedLocationsViewModel()
+    @State private var isPresentingLocationSavedConfirmation = false
     @State private var position = MapCameraPosition.region(
         MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: 52.2053, longitude: 0.1218),
@@ -31,7 +33,12 @@ struct MapView: View {
         .navigationTitle("Plan Route")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if vm.currentJourney != nil {
+            if let journey = vm.currentJourney {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    NavigationLink("Itinerary") {
+                        ItineraryView(journey: journey)
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Clear") { vm.clearRoute() }
                 }
@@ -47,6 +54,9 @@ struct MapView: View {
             Button("OK", role: .cancel) { vm.errorMessage = nil }
         } message: {
             Text(vm.errorMessage ?? "")
+        }
+        .alert("Location Saved", isPresented: $isPresentingLocationSavedConfirmation) {
+            Button("OK", role: .cancel) {}
         }
     }
 
@@ -94,15 +104,25 @@ struct MapView: View {
 
     private var resultsList: some View {
         List(vm.searchResults) { place in
-            Button {
-                selectPlace(place)
-            } label: {
-                VStack(alignment: .leading) {
-                    Text(place.name).font(.body)
-                    if let near = place.near {
-                        Text(near).font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Button {
+                    selectPlace(place)
+                } label: {
+                    VStack(alignment: .leading) {
+                        Text(place.name).font(.body)
+                        if let near = place.near {
+                            Text(near).font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                 }
+                Spacer()
+                Button {
+                    savedLocationsVM.save(name: place.name, coordinate: place.coordinate)
+                    isPresentingLocationSavedConfirmation = true
+                } label: {
+                    Image(systemName: "bookmark")
+                }
+                .buttonStyle(.borderless)
             }
         }
         .listStyle(.plain)

@@ -8,6 +8,10 @@ import SwiftUI
 struct ItineraryView: View {
     let journey: Journey
     @AppStorage("useMetric") private var useMetric = true
+    @State private var savedRoutesVM = SavedRoutesViewModel()
+    @State private var isPresentingSaveAlert = false
+    @State private var isPresentingSavedConfirmation = false
+    @State private var routeName = ""
 
     private var vm: ItineraryViewModel {
         ItineraryViewModel(journey: journey, useMetric: useMetric)
@@ -41,8 +45,28 @@ struct ItineraryView: View {
         .navigationTitle("Itinerary")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Save") {
+                    routeName = ""
+                    isPresentingSaveAlert = true
+                }
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
                 GPXExportButton(journeyID: journey.number, plan: journey.plan)
             }
+        }
+        .alert("Save Route", isPresented: $isPresentingSaveAlert) {
+            TextField("Route name", text: $routeName)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                let trimmed = routeName.trimmingCharacters(in: .whitespacesAndNewlines)
+                savedRoutesVM.save(journey: journey, name: trimmed.isEmpty ? nil : trimmed)
+                isPresentingSavedConfirmation = true
+            }
+        } message: {
+            Text("Enter a name, or leave blank to use a default name.")
+        }
+        .alert("Route Saved", isPresented: $isPresentingSavedConfirmation) {
+            Button("OK", role: .cancel) {}
         }
     }
 }
