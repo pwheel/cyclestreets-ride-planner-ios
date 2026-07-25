@@ -11,7 +11,7 @@ import SwiftUI
 struct CycleStreets_Ride_PlannerApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
         }
     }
 }
