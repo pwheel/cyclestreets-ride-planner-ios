@@ -13,7 +13,7 @@ Resolved during brainstorming (see roadmap doc's "Open design questions" for the
 1. **Default behavior, not opt-in.** Every `planRoute(from:to:)` call fetches all 3 plans concurrently and shows them together. The existing app has no plan-switcher UI on the Map screen today (confirmed via grep — `MapViewModel.routePlan` is set once at init and never changed from `MapView`), so this replaces the single hidden default-plan lookup rather than competing with an existing single-plan picker. Cost: 3x API calls per plan action, accepted as the price of the core ask.
 2. **Partial failure: show what succeeded, flag the rest.** If 1-2 of the 3 requests fail, render whichever routes came back; the failed plan's legend chip shows a disabled/dimmed state with a warning glyph instead of blocking the working routes with an alert.
 3. **Selection UX: legend/chip row.** A row of 3 tappable chips (color dot + plan name) selects which route is "active" (feeds Itinerary/Save/GPX). Chosen over tapping the polyline directly on the map, since SwiftUI `Map`'s polyline tap hit-testing is unreliable, especially where routes overlap.
-4. **Visual differentiation: color-per-plan.** Quietest=green, Balanced=blue, Fastest=red, matching common cycle-routing conventions. The selected route is additionally drawn with a heavier stroke than the other two, so "active" is visually distinct without extra chrome. Start/End `Marker`s move from green/red (now claimed by routes) to gray/black to avoid clashing.
+4. **Visual differentiation: color-per-plan.** Quietest=green, Balanced=yellow, Fastest=red, matching the CycleStreets mobile website's route colors. The selected route is additionally drawn with a heavier stroke than the other two, so "active" is visually distinct without extra chrome. Start/End `Marker`s stay green/red — also matching the CycleStreets mobile website, and not considered a clash worth avoiding.
 5. **`Settings.defaultRoutePlan` is repurposed as pre-selection.** It becomes "which chip is pre-selected when a route is first planned," rather than "the only plan requested." This setting is currently dead code — confirmed via grep that `MapViewModel.routePlan` is hardcoded to `.balanced` at declaration and never reads `@AppStorage("defaultRoutePlan")` — so wiring it up is in scope alongside the repurpose, not a separate fix.
 
 ## Data model & fetch strategy
@@ -41,8 +41,8 @@ var currentJourney: Journey? { routeOptions.first { $0.plan == selectedPlan }?.j
 
 ## Rendering (`MapView`)
 
-- Draw one `MapPolyline` per `RouteOption` with a non-nil `journey`, colored by plan (green/blue/red per above). The selected route draws with `lineWidth: 5`; the other two with `lineWidth: 3`.
-- Start/End `Marker`s recolor to `.gray` / `.black`.
+- Draw one `MapPolyline` per `RouteOption` with a non-nil `journey`, colored by plan (green/yellow/red per above). The selected route draws with `lineWidth: 5`; the other two with `lineWidth: 3`.
+- Start/End `Marker`s stay `.green` / `.red`, unchanged from today.
 - A legend/chip row (`HStack` of 3 tappable chips: color dot + plan name), placed below the existing search bar. Tapping a chip sets `vm.selectedPlan`. A chip whose plan has no `journey` (failed request) renders dimmed with a warning glyph and is not tappable.
 
 ## Settings interaction
