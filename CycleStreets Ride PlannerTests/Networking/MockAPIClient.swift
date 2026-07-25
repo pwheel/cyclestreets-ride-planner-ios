@@ -12,6 +12,7 @@ final class MockAPIClient: APIClientProtocol {
     var placesToReturn: [Place] = []
     var gpxDataToReturn = Data("gpx content".utf8)
     var shouldThrow: Error?
+    var geocodeQueriesReceived: [String] = []
 
     private func checkThrow() throws {
         if let e = shouldThrow { throw e }
@@ -26,6 +27,7 @@ final class MockAPIClient: APIClientProtocol {
 
     func geocode(query: String) async throws -> [Place] {
         try checkThrow()
+        geocodeQueriesReceived.append(query)
         return placesToReturn
     }
 

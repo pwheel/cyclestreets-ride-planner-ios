@@ -26,19 +26,36 @@ final class MapViewModel {
     var isLoading = false
     var errorMessage: String?
     var routePlan: RoutePlan = .balanced
+    var searchDebounceMilliseconds: UInt64 = 300
 
     private let apiClient: any APIClientProtocol
+    private var searchDebounceTask: Task<Void, Never>?
 
     init(apiClient: any APIClientProtocol) {
         self.apiClient = apiClient
     }
 
     func search(query: String) async {
+        searchDebounceTask?.cancel()
         guard !query.isEmpty else { searchResults = []; return }
         do {
             searchResults = try await apiClient.geocode(query: query)
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Called as the user types in the search field to provide typeahead
+    /// suggestions, debouncing so each keystroke doesn't fire its own
+    /// network request.
+    func searchTextChanged(_ text: String) {
+        searchDebounceTask?.cancel()
+        guard !text.isEmpty else { searchResults = []; return }
+        let milliseconds = searchDebounceMilliseconds
+        searchDebounceTask = Task {
+            try? await Task.sleep(for: .milliseconds(milliseconds))
+            guard !Task.isCancelled else { return }
+            await search(query: text)
         }
     }
 

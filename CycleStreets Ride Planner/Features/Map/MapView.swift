@@ -114,6 +114,7 @@ struct MapView: View {
             )
             .submitLabel(.search)
             .onSubmit { Task { await vm.search(query: searchText) } }
+            .onChange(of: searchText) { _, newValue in vm.searchTextChanged(newValue) }
             if !searchText.isEmpty {
                 Button { searchText = ""; vm.searchResults = [] } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
