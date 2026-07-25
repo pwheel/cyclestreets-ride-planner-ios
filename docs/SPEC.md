@@ -23,11 +23,13 @@ SwiftUI iOS app for planning cycle routes using the CycleStreets API (journey pl
 ### Map (`Features/Map/`)
 The home screen. Search a start/end location (via CycleStreets geocoder, with debounced typeahead), plan a route, view it as a polyline + markers, clear it, or jump to the itinerary.
 
-- `MapViewModel`: `searchResults`, `fromPlace`/`toPlace`, `currentJourney`, `isLoading`, `errorMessage`, `routePlan`.
+- `MapViewModel`: `searchResults`, `fromPlace`/`toPlace`, `routeOptions`, `selectedPlan`, `currentJourney`, `isLoading`, `errorMessage`.
+  - `routeOptions: [RouteOption]` — always 3 entries after a plan attempt (`.quietest, .balanced, .fastest` order), each holding that plan's `journey: Journey?` and `errorMessage: String?` (nil journey + non-nil errorMessage means that plan's request failed). `currentJourney` is computed from `routeOptions.first { $0.plan == selectedPlan }?.journey` — feeds `ItineraryView`, Save, and GPX export exactly as before.
   - `search(query:)` — immediate geocode; ignores cancellation errors (a superseded in-flight request from a stale keystroke is not a user-facing error — see `searchTextChanged`).
   - `searchTextChanged(_:)` — debounced (default 300ms, `searchDebounceMilliseconds` is injectable for tests) typeahead; cancels the prior pending search on each new keystroke.
-  - `planRoute(from:to:)`, `clearRoute()`.
-  - `loadJourney(_:)` — populates the map from a journey obtained outside the normal search flow (a reloaded saved route); synthesizes placeholder from/to `Place`s from the journey's own first/last coordinate since no searched `Place` exists for it.
+  - `planRoute(from:to:)` — fetches all 3 `RoutePlan`s concurrently (`async let`, one `apiClient.planJourney` call per plan). Per-plan failures are captured in that plan's `RouteOption.errorMessage`, not the shared `errorMessage` (which remains reserved for `search(query:)` failures). If `selectedPlan`'s own request fails but another succeeds, `selectedPlan` auto-falls-back to the first successful plan in `.quietest, .balanced, .fastest` order.
+  - `clearRoute()` — resets `routeOptions` to `[]` (plus from/to/search state, as before).
+  - `loadJourney(_:)` — populates the map from a journey obtained outside the normal search flow (a reloaded saved route); sets `routeOptions` to a single entry for that journey's own plan (no comparison fetch of the other two plans — reloading a saved route is a distinct flow from fresh planning) and sets `selectedPlan` to match. Synthesizes placeholder from/to `Place`s from the journey's own first/last coordinate since no searched `Place` exists for it.
   - `selectPlace(_:as:)` — assigns a `Place` to `.from`/`.to` (`WaypointRole`); once both are set, calls `planRoute`. Used both by tapping a search result and by the Saved Locations cross-tab hand-off.
 - `MapView`: search bar with From/To segmented picker, results list (tap to select, bookmark icon to save as a Saved Location), map with polyline + Start/End markers, "Clear" button (also resets the From/To picker to "From"), toolbar link to `ItineraryView` once a route exists. Tapping the map (not the search UI) dismisses the keyboard.
 - `RoutePolyline`: `MKPolyline` subclass, `.from(journey:)` factory.

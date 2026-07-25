@@ -14,6 +14,8 @@ final class MockAPIClient: APIClientProtocol {
     var shouldThrow: Error?
     var geocodeQueriesReceived: [String] = []
     var geocodeDelayMilliseconds: UInt64 = 0
+    var journeysByPlan: [RoutePlan: Journey] = [:]
+    var errorsByPlan: [RoutePlan: Error] = [:]
 
     private func checkThrow() throws {
         if let e = shouldThrow { throw e }
@@ -22,8 +24,9 @@ final class MockAPIClient: APIClientProtocol {
     func planJourney(from: CLLocationCoordinate2D,
                      to: CLLocationCoordinate2D,
                      plan: RoutePlan) async throws -> Journey {
+        if let error = errorsByPlan[plan] { throw error }
         try checkThrow()
-        return journeyToReturn ?? makeJourney()
+        return journeysByPlan[plan] ?? journeyToReturn ?? makeJourney(plan: plan)
     }
 
     func geocode(query: String) async throws -> [Place] {

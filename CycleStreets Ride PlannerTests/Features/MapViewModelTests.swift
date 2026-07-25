@@ -38,12 +38,15 @@ final class MapViewModelTests {
         #expect(vm.currentJourney?.number == journey.number)
     }
 
-    @Test func testPlanRouteErrorSetsErrorMessage() async {
+    @Test func testPlanRouteAllPlansFailLeavesCurrentJourneyNil() async {
         client.shouldThrow = URLError(.notConnectedToInternet)
         let from = CLLocationCoordinate2D(latitude: 52.2054, longitude: 0.1132)
         let to   = CLLocationCoordinate2D(latitude: 52.1952, longitude: 0.1201)
         await vm.planRoute(from: from, to: to)
-        #expect(vm.errorMessage != nil)
+        #expect(vm.currentJourney == nil)
+        #expect(vm.routeOptions.count == 3)
+        #expect(vm.routeOptions.allSatisfy { $0.journey == nil && $0.errorMessage != nil })
+        #expect(vm.errorMessage == nil)
     }
 
     @Test func testClearRouteResetsState() async {
@@ -52,6 +55,7 @@ final class MapViewModelTests {
         await vm.planRoute(from: c, to: c)
         vm.clearRoute()
         #expect(vm.currentJourney == nil)
+        #expect(vm.routeOptions.isEmpty)
         #expect(vm.fromPlace == nil)
         #expect(vm.toPlace == nil)
     }
@@ -158,5 +162,70 @@ final class MapViewModelTests {
         try await Task.sleep(for: .milliseconds(150))
         #expect(vm.errorMessage == nil)
         #expect(vm.searchResults.count == 1)
+    }
+
+    @Test func testInitSetsSelectedPlanFromInitialValue() {
+        let vm2 = MapViewModel(apiClient: client, initialSelectedPlan: .fastest)
+        #expect(vm2.selectedPlan == .fastest)
+    }
+
+    @Test func testPlanRouteAllPlansSucceedPopulatesRouteOptions() async {
+        client.journeysByPlan = [
+            .quietest: client.makeJourney(plan: .quietest),
+            .balanced: client.makeJourney(plan: .balanced),
+            .fastest: client.makeJourney(plan: .fastest)
+        ]
+        let from = CLLocationCoordinate2D(latitude: 52.2054, longitude: 0.1132)
+        let to   = CLLocationCoordinate2D(latitude: 52.1952, longitude: 0.1201)
+        await vm.planRoute(from: from, to: to)
+        #expect(vm.routeOptions.count == 3)
+        #expect(vm.routeOptions.allSatisfy { $0.journey != nil })
+        #expect(vm.currentJourney?.plan == .balanced)
+    }
+
+    @Test func testPlanRoutePartialFailureOnSelectedPlanFallsBackToFirstSuccess() async {
+        client.journeysByPlan = [
+            .quietest: client.makeJourney(plan: .quietest),
+            .fastest: client.makeJourney(plan: .fastest)
+        ]
+        client.errorsByPlan = [.balanced: NSError(domain: "Test", code: 1)]
+        let c = CLLocationCoordinate2D(latitude: 52.2054, longitude: 0.1132)
+        await vm.planRoute(from: c, to: c)
+        #expect(vm.selectedPlan == .quietest)
+        #expect(vm.currentJourney?.plan == .quietest)
+    }
+
+    @Test func testPlanRoutePartialFailureOnNonSelectedPlanKeepsSelection() async {
+        client.journeysByPlan = [
+            .balanced: client.makeJourney(plan: .balanced),
+            .quietest: client.makeJourney(plan: .quietest)
+        ]
+        client.errorsByPlan = [.fastest: NSError(domain: "Test", code: 1)]
+        let c = CLLocationCoordinate2D(latitude: 52.2054, longitude: 0.1132)
+        await vm.planRoute(from: c, to: c)
+        #expect(vm.selectedPlan == .balanced)
+        #expect(vm.currentJourney?.plan == .balanced)
+        let fastestOption = vm.routeOptions.first { $0.plan == .fastest }
+        #expect(fastestOption?.journey == nil)
+        #expect(fastestOption?.errorMessage != nil)
+    }
+
+    @Test func testSelectingDifferentPlanUpdatesCurrentJourney() async {
+        client.journeysByPlan = [
+            .quietest: client.makeJourney(plan: .quietest),
+            .balanced: client.makeJourney(plan: .balanced),
+            .fastest: client.makeJourney(plan: .fastest)
+        ]
+        let c = CLLocationCoordinate2D(latitude: 52.2054, longitude: 0.1132)
+        await vm.planRoute(from: c, to: c)
+        vm.selectedPlan = .fastest
+        #expect(vm.currentJourney?.plan == .fastest)
+    }
+
+    @Test func testLoadJourneySetsSelectedPlanToJourneysPlan() {
+        let journey = client.makeJourney(plan: .fastest)
+        vm.loadJourney(journey)
+        #expect(vm.selectedPlan == .fastest)
+        #expect(vm.currentJourney == journey)
     }
 }

@@ -16,23 +16,37 @@ struct PendingPlaceSelection: Equatable {
     let role: WaypointRole
 }
 
+/// One of the three concurrently-fetched route plans shown on the map at
+/// once. `journey` is nil and `errorMessage` is set when that plan's
+/// request failed.
+struct RouteOption: Identifiable, Equatable {
+    var id: RoutePlan { plan }
+    let plan: RoutePlan
+    var journey: Journey?
+    var errorMessage: String?
+}
+
 @Observable
 @MainActor
 final class MapViewModel {
     var searchResults: [Place] = []
     var fromPlace: Place?
     var toPlace: Place?
-    var currentJourney: Journey?
+    var routeOptions: [RouteOption] = []
+    var selectedPlan: RoutePlan
     var isLoading = false
     var errorMessage: String?
-    var routePlan: RoutePlan = .balanced
     var searchDebounceMilliseconds: UInt64 = 300
+
+    /// The active route among `routeOptions` — feeds `ItineraryView`, Save, and GPX export.
+    var currentJourney: Journey? { routeOptions.first { $0.plan == selectedPlan }?.journey }
 
     private let apiClient: any APIClientProtocol
     private var searchDebounceTask: Task<Void, Never>?
 
-    init(apiClient: any APIClientProtocol) {
+    init(apiClient: any APIClientProtocol, initialSelectedPlan: RoutePlan = .balanced) {
         self.apiClient = apiClient
+        self.selectedPlan = initialSelectedPlan
     }
 
     func search(query: String) async {
@@ -61,19 +75,34 @@ final class MapViewModel {
         }
     }
 
+    /// Fetches all 3 route plans concurrently and shows them together. If
+    /// the currently selected plan's request fails but another succeeds,
+    /// falls back to the first successful plan in quietest/balanced/fastest
+    /// order, so a partially-successful fetch never leaves nothing selected.
     func planRoute(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) async {
         isLoading = true
-        errorMessage = nil
-        do {
-            currentJourney = try await apiClient.planJourney(from: from, to: to, plan: routePlan)
-        } catch {
-            errorMessage = error.localizedDescription
+        async let quietest = fetchOption(.quietest, from: from, to: to)
+        async let balanced = fetchOption(.balanced, from: from, to: to)
+        async let fastest = fetchOption(.fastest, from: from, to: to)
+        routeOptions = [await quietest, await balanced, await fastest]
+        if routeOptions.first(where: { $0.plan == selectedPlan })?.journey == nil,
+           let fallback = routeOptions.first(where: { $0.journey != nil }) {
+            selectedPlan = fallback.plan
         }
         isLoading = false
     }
 
+    private func fetchOption(_ plan: RoutePlan, from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) async -> RouteOption {
+        do {
+            let journey = try await apiClient.planJourney(from: from, to: to, plan: plan)
+            return RouteOption(plan: plan, journey: journey, errorMessage: nil)
+        } catch {
+            return RouteOption(plan: plan, journey: nil, errorMessage: error.localizedDescription)
+        }
+    }
+
     func clearRoute() {
-        currentJourney = nil
+        routeOptions = []
         fromPlace = nil
         toPlace = nil
         searchResults = []
@@ -83,9 +112,12 @@ final class MapViewModel {
     /// Populates the map from a journey obtained outside the normal
     /// search flow (e.g. a reloaded saved route), deriving placeholder
     /// from/to markers from the journey's own coordinates since no
-    /// searched `Place` exists for it.
+    /// searched `Place` exists for it. Shows only that one journey — does
+    /// not fetch comparison routes for the other two plans, since reloading
+    /// a specific saved route is a distinct flow from fresh planning.
     func loadJourney(_ journey: Journey) {
-        currentJourney = journey
+        routeOptions = [RouteOption(plan: journey.plan, journey: journey, errorMessage: nil)]
+        selectedPlan = journey.plan
         searchResults = []
         errorMessage = nil
         let coordinates = journey.allCoordinates
