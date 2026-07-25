@@ -33,8 +33,6 @@ struct MapView: View {
             }
             .padding(.top, 8)
         }
-        .contentShape(Rectangle())
-        .onTapGesture { isSearchFieldFocused = false }
         .navigationTitle("Plan Route")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -109,6 +107,7 @@ struct MapView: View {
             }
         }
         .ignoresSafeArea(edges: .bottom)
+        .onTapGesture { isSearchFieldFocused = false }
     }
 
     private var searchBar: some View {
