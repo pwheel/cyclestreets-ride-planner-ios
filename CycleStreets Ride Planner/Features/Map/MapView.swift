@@ -8,6 +8,7 @@ struct MapView: View {
     @Binding var pendingPlaceSelection: PendingPlaceSelection?
     @State private var searchText = ""
     @State private var selectingFor: WaypointRole = .from
+    @FocusState private var isSearchFieldFocused: Bool
     @State private var savedLocationsVM = SavedLocationsViewModel()
     @State private var isPresentingLocationSavedConfirmation = false
     @State private var position = MapCameraPosition.region(
@@ -32,6 +33,8 @@ struct MapView: View {
             }
             .padding(.top, 8)
         }
+        .contentShape(Rectangle())
+        .onTapGesture { isSearchFieldFocused = false }
         .navigationTitle("Plan Route")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -42,7 +45,10 @@ struct MapView: View {
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Clear") { vm.clearRoute() }
+                    Button("Clear") {
+                        vm.clearRoute()
+                        selectingFor = .from
+                    }
                 }
             }
         }
@@ -113,6 +119,7 @@ struct MapView: View {
                 text: $searchText
             )
             .submitLabel(.search)
+            .focused($isSearchFieldFocused)
             .onSubmit { Task { await vm.search(query: searchText) } }
             .onChange(of: searchText) { _, newValue in vm.searchTextChanged(newValue) }
             if !searchText.isEmpty {
