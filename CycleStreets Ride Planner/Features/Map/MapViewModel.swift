@@ -36,11 +36,13 @@ final class MapViewModel {
     }
 
     func search(query: String) async {
-        searchDebounceTask?.cancel()
         guard !query.isEmpty else { searchResults = []; return }
         do {
             searchResults = try await apiClient.geocode(query: query)
         } catch {
+            // A newer keystroke may have cancelled this in-flight request via
+            // searchTextChanged's debounce; that's not a user-facing error.
+            guard !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
         }
     }

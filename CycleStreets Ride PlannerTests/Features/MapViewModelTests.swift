@@ -134,4 +134,29 @@ final class MapViewModelTests {
         try await Task.sleep(for: .milliseconds(50))
         #expect(client.geocodeQueriesReceived == ["Cambridge"])
     }
+
+    @Test func testSearchTextChangedDoesNotSetErrorMessageWhenDebounceFires() async throws {
+        vm.searchDebounceMilliseconds = 10
+        client.placesToReturn = [
+            Place(id: "1", name: "Cambridge", near: nil, coordinate: Coordinate(longitude: 0, latitude: 0))
+        ]
+        vm.searchTextChanged("Cambridge")
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(vm.errorMessage == nil)
+        #expect(vm.searchResults.count == 1)
+    }
+
+    @Test func testSearchTextChangedDoesNotSetErrorMessageWhenInFlightSearchIsSuperseded() async throws {
+        vm.searchDebounceMilliseconds = 10
+        client.geocodeDelayMilliseconds = 100
+        client.placesToReturn = [
+            Place(id: "1", name: "Cambridge", near: nil, coordinate: Coordinate(longitude: 0, latitude: 0))
+        ]
+        vm.searchTextChanged("Ca")
+        try await Task.sleep(for: .milliseconds(30))
+        vm.searchTextChanged("Cambridge")
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(vm.errorMessage == nil)
+        #expect(vm.searchResults.count == 1)
+    }
 }
