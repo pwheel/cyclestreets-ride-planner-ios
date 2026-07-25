@@ -19,7 +19,9 @@ struct MapView: View {
     )
 
     init(apiClient: any APIClientProtocol, pendingJourney: Binding<Journey?>, pendingPlaceSelection: Binding<PendingPlaceSelection?>) {
-        _vm = State(initialValue: MapViewModel(apiClient: apiClient))
+        let storedRawValue = UserDefaults.standard.string(forKey: "defaultRoutePlan") ?? RoutePlan.balanced.rawValue
+        let initialPlan = RoutePlan(rawValue: storedRawValue) ?? .balanced
+        _vm = State(initialValue: MapViewModel(apiClient: apiClient, initialSelectedPlan: initialPlan))
         _pendingJourney = pendingJourney
         _pendingPlaceSelection = pendingPlaceSelection
     }
@@ -30,6 +32,7 @@ struct MapView: View {
             VStack(spacing: 0) {
                 searchBar
                 if !vm.searchResults.isEmpty { resultsList }
+                if !vm.routeOptions.isEmpty { legendRow.padding(.top, 8) }
             }
             .padding(.top, 8)
         }
@@ -95,9 +98,16 @@ struct MapView: View {
 
     private var map: some View {
         Map(position: $position) {
-            if let journey = vm.currentJourney {
+            ForEach(nonSelectedRouteOptions) { option in
+                if let journey = option.journey {
+                    MapPolyline(coordinates: journey.allCoordinates)
+                        .stroke(color(for: option.plan), lineWidth: 3)
+                }
+            }
+            if let selectedOption = vm.routeOptions.first(where: { $0.plan == vm.selectedPlan }),
+               let journey = selectedOption.journey {
                 MapPolyline(coordinates: journey.allCoordinates)
-                    .stroke(.blue, lineWidth: 4)
+                    .stroke(color(for: selectedOption.plan), lineWidth: 5)
             }
             if let from = vm.fromPlace {
                 Marker("Start", coordinate: from.clCoordinate).tint(.green)
@@ -108,6 +118,51 @@ struct MapView: View {
         }
         .ignoresSafeArea(edges: .bottom)
         .onTapGesture { isSearchFieldFocused = false }
+    }
+
+    private var nonSelectedRouteOptions: [RouteOption] {
+        vm.routeOptions.filter { $0.plan != vm.selectedPlan }
+    }
+
+    private func color(for plan: RoutePlan) -> Color {
+        switch plan {
+        case .quietest: return .green
+        case .balanced: return .yellow
+        case .fastest: return .red
+        }
+    }
+
+    private var legendRow: some View {
+        HStack(spacing: 12) {
+            ForEach(vm.routeOptions) { option in
+                Button {
+                    vm.selectedPlan = option.plan
+                } label: {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(color(for: option.plan))
+                            .frame(width: 10, height: 10)
+                        Text(option.plan.displayName)
+                        if option.errorMessage != nil {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .font(.subheadline)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        option.plan == vm.selectedPlan ? Color.secondary.opacity(0.2) : Color.clear,
+                        in: Capsule()
+                    )
+                }
+                .disabled(option.journey == nil)
+                .opacity(option.journey == nil ? 0.5 : 1)
+            }
+        }
+        .padding(8)
+        .background(.regularMaterial, in: Capsule())
+        .padding(.horizontal)
     }
 
     private var searchBar: some View {

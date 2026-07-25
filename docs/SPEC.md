@@ -31,7 +31,7 @@ The home screen. Search a start/end location (via CycleStreets geocoder, with de
   - `clearRoute()` — resets `routeOptions` to `[]` (plus from/to/search state, as before).
   - `loadJourney(_:)` — populates the map from a journey obtained outside the normal search flow (a reloaded saved route); sets `routeOptions` to a single entry for that journey's own plan (no comparison fetch of the other two plans — reloading a saved route is a distinct flow from fresh planning) and sets `selectedPlan` to match. Synthesizes placeholder from/to `Place`s from the journey's own first/last coordinate since no searched `Place` exists for it.
   - `selectPlace(_:as:)` — assigns a `Place` to `.from`/`.to` (`WaypointRole`); once both are set, calls `planRoute`. Used both by tapping a search result and by the Saved Locations cross-tab hand-off.
-- `MapView`: search bar with From/To segmented picker, results list (tap to select, bookmark icon to save as a Saved Location), map with polyline + Start/End markers, "Clear" button (also resets the From/To picker to "From"), toolbar link to `ItineraryView` once a route exists. Tapping the map (not the search UI) dismisses the keyboard.
+- `MapView`: search bar with From/To segmented picker, results list (tap to select, bookmark icon to save as a Saved Location), map showing one colored polyline per successfully-fetched `RouteOption` (quietest=green, balanced=yellow, fastest=red; the selected plan draws with a heavier stroke), a legend/chip row below the search bar for picking the active plan (tapping a chip sets `selectedPlan`; a chip for a plan whose request failed is dimmed/disabled with a warning glyph), Start/End markers (green/red, matching the CycleStreets mobile website), "Clear" button (also resets the From/To picker to "From"), toolbar link to `ItineraryView` once a route exists. Tapping the map (not the search UI) dismisses the keyboard.
 - `RoutePolyline`: `MKPolyline` subclass, `.from(journey:)` factory.
 
 ### Itinerary (`Features/Itinerary/`)
@@ -44,7 +44,7 @@ Turn-by-turn view of a planned `Journey`. `ItineraryViewModel` (plain, not `@Obs
 `SavedLocationsViewModel`: `load()`, `save(name:coordinate:)`, `delete(at:)`. No networking dependency. `SavedLocationsView` rows are tappable; a confirmation dialog picks From/To, then hands the `Place` + role to the Map tab.
 
 ### Settings (`Features/Settings/`)
-`@AppStorage`-backed: `"defaultRoutePlan"` (default `.balanced`), `"useMetric"` (default `true`). Plus an About section (version, links).
+`@AppStorage`-backed: `"defaultRoutePlan"` (default `.balanced`) — read by `MapView` at construction to seed `MapViewModel`'s initial `selectedPlan` (which of the 3 always-fetched route plans is pre-selected), not which plan is requested; `"useMetric"` (default `true`). Plus an About section (version, links).
 
 ### GPX Export (`Features/GPX/`)
 `GPXExportButton(journeyID:plan:)` downloads via `apiClient.downloadGPX`, writes to a temp file, presents a `UIActivityViewController` share sheet.
@@ -90,4 +90,6 @@ Reuse this pattern for any future "select something in tab A, act on it in tab B
 
 ## Known limitations / roadmap
 
-Not implemented, captured for future design in `docs/superpowers/plans/2026-07-19-roadmap-multi-route-comparison.md`: simultaneous multi-route comparison (quietest/balanced/fastest shown together), switchable geocoder provider (CycleStreets vs MapKit, flag-based), editable saved-location names, "Current Location" via device location permissions.
+Not implemented, captured for future design in `docs/superpowers/plans/2026-07-19-roadmap-multi-route-comparison.md`: switchable geocoder provider (CycleStreets vs MapKit, flag-based), editable saved-location names, "Current Location" via device location permissions.
+
+Simultaneous multi-route comparison (quietest/balanced/fastest shown together) is implemented — see the Map screen section above. Design record: `docs/superpowers/specs/2026-07-25-multi-route-comparison-design.md`; implementation plan: `docs/superpowers/plans/2026-07-25-multi-route-comparison.md`.
