@@ -24,6 +24,9 @@ struct RouteOption: Identifiable, Equatable {
     let plan: RoutePlan
     var journey: Journey?
     var errorMessage: String?
+
+    /// True when this plan's request failed (no journey to show).
+    var failed: Bool { journey == nil }
 }
 
 @Observable

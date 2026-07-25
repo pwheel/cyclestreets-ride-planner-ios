@@ -143,7 +143,7 @@ struct MapView: View {
                             .fill(color(for: option.plan))
                             .frame(width: 10, height: 10)
                         Text(option.plan.displayName)
-                        if option.errorMessage != nil {
+                        if option.failed {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundStyle(.secondary)
                         }
@@ -156,8 +156,8 @@ struct MapView: View {
                         in: Capsule()
                     )
                 }
-                .disabled(option.journey == nil)
-                .opacity(option.journey == nil ? 0.5 : 1)
+                .disabled(option.failed)
+                .opacity(option.failed ? 0.5 : 1)
             }
         }
         .padding(8)
