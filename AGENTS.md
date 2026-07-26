@@ -31,6 +31,10 @@ xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStr
 - **New-worktree gotcha:** `skip-worktree` is per-checkout, so a freshly created worktree checks out the tracked *placeholder* value (`YOUR_API_KEY_HERE`), not the real key from another checkout's working tree. Symptom: every live API call (search, journey planning) fails, and — because the API's error JSON (`{"error": "No valid API key..."}`) doesn't match the expected response shape — it surfaces as a generic decode error ("The data couldn't be read because it was missing") rather than an obviously key-related message. Fix: `cp` the real key file in from another checkout with the real key set, then re-run `git update-index --skip-worktree` on the copy in the new worktree.
 - `Resources/ThunderforestAPIKey_dev.txt`/`ThunderforestAPIKey_live.txt` (the Thunderforest tile-provider key, used by the Map screen's OSM Standard/Cycle Map styles) follow the identical pattern and are subject to the identical rules above — same `skip-worktree` flagging, same never-`git add -f`, and the same new-worktree gotcha (a fresh worktree gets the tracked placeholder `YOUR_THUNDERFOREST_API_KEY_HERE`, not a real key from another checkout).
 
+## Branching
+
+Never commit directly to `main`. Use at least a branch for minor work (docs-only tweaks, one-line fixes); prefer a git worktree for everything else, so the change is isolated from whatever else is checked out in the primary working directory.
+
 ## Before finishing any change
 
 Work through `docs/REVIEW_CHECKLIST.md`. In particular: **`docs/SPEC.md` must be updated in the same commit** as any change that adds/removes/materially changes a screen, ViewModel contract, API endpoint, persistence schema, or cross-cutting pattern. This is not optional — an out-of-date spec is worse than no spec, because future agents will trust it.

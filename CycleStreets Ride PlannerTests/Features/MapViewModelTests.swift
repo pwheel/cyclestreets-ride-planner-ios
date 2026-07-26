@@ -8,6 +8,28 @@ import Foundation
 import CoreLocation
 @testable import CycleStreets_Ride_Planner
 
+/// Polls `condition` until it becomes true or `timeout` elapses, instead of
+/// sleeping a fixed duration and hoping the async work under test finished in
+/// time. This suite runs with default (non-serialized) Swift Testing
+/// parallelism, so a fixed sleep margin is unreliable under CI's variable
+/// CPU contention — condition-based waiting is deterministic regardless of
+/// scheduling delay.
+@MainActor
+private func waitUntil(
+    timeout: Duration = .seconds(5),
+    pollInterval: Duration = .milliseconds(10),
+    _ condition: () -> Bool
+) async throws {
+    let deadline = ContinuousClock.now + timeout
+    while !condition() {
+        if ContinuousClock.now >= deadline {
+            Issue.record("Timed out after \(timeout) waiting for condition")
+            return
+        }
+        try await Task.sleep(for: pollInterval)
+    }
+}
+
 @MainActor
 final class MapViewModelTests {
     let client: MockAPIClient
@@ -116,26 +138,26 @@ final class MapViewModelTests {
     }
 
     @Test func testSearchTextChangedDebouncesAndSearches() async throws {
-        vm.searchDebounceMilliseconds = 10
+        vm.searchDebounceMilliseconds = 100
         client.placesToReturn = [
             Place(id: "1", name: "Cambridge", near: "Cambridgeshire",
                   coordinate: Coordinate(longitude: 0.1218, latitude: 52.2053))
         ]
         vm.searchTextChanged("Cambridge")
-        try await Task.sleep(for: .milliseconds(50))
+        try await waitUntil { vm.searchResults.count == 1 }
         #expect(vm.searchResults.count == 1)
         #expect(client.geocodeQueriesReceived == ["Cambridge"])
     }
 
     @Test func testSearchTextChangedCancelsPendingSearchOnRapidTyping() async throws {
-        vm.searchDebounceMilliseconds = 30
+        vm.searchDebounceMilliseconds = 150
         client.placesToReturn = [
             Place(id: "1", name: "Cambridge", near: nil, coordinate: Coordinate(longitude: 0, latitude: 0))
         ]
         vm.searchTextChanged("Ca")
-        try await Task.sleep(for: .milliseconds(10))
-        vm.searchTextChanged("Cambridge")
         try await Task.sleep(for: .milliseconds(50))
+        vm.searchTextChanged("Cambridge")
+        try await waitUntil { client.geocodeQueriesReceived == ["Cambridge"] }
         #expect(client.geocodeQueriesReceived == ["Cambridge"])
     }
 
@@ -145,7 +167,7 @@ final class MapViewModelTests {
             Place(id: "1", name: "Cambridge", near: nil, coordinate: Coordinate(longitude: 0, latitude: 0))
         ]
         vm.searchTextChanged("Cambridge")
-        try await Task.sleep(for: .milliseconds(50))
+        try await waitUntil { vm.searchResults.count == 1 }
         #expect(vm.errorMessage == nil)
         #expect(vm.searchResults.count == 1)
     }
@@ -159,7 +181,7 @@ final class MapViewModelTests {
         vm.searchTextChanged("Ca")
         try await Task.sleep(for: .milliseconds(30))
         vm.searchTextChanged("Cambridge")
-        try await Task.sleep(for: .milliseconds(150))
+        try await waitUntil { vm.searchResults.count == 1 }
         #expect(vm.errorMessage == nil)
         #expect(vm.searchResults.count == 1)
     }
