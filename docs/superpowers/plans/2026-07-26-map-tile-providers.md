@@ -31,7 +31,7 @@
 
 This step can't be scripted safely — Xcode's `project.pbxproj` package-reference format is easy to corrupt by hand, and this project has zero existing `XCRemoteSwiftPackageReference` entries to pattern-match against. Do it through Xcode itself:
 
-- [ ] **Step 1: Add the package in Xcode**
+- [x] **Step 1: Add the package in Xcode**
 
 Open `CycleStreets Ride Planner.xcodeproj` in Xcode. File → Add Package Dependencies… Enter the URL:
 
@@ -41,7 +41,7 @@ https://github.com/maplibre/swiftui-dsl
 
 Dependency Rule: **Exact Version** → `0.25.0` (not "Up to Next Major" — this is a pre-1.0 package per its own README, so pin exactly). When the product picker appears, add both **`MapLibreSwiftUI`** and **`MapLibreSwiftDSL`** to the **"CycleStreets Ride Planner"** app target (not the test targets).
 
-- [ ] **Step 2: Verify it resolved and the project still builds**
+- [x] **Step 2: Verify it resolved and the project still builds**
 
 Run:
 ```bash
@@ -55,7 +55,7 @@ xcodebuild build -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleSt
 ```
 Expected: `** BUILD SUCCEEDED **` (no source changes yet, just confirming the new dependency links cleanly).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add "CycleStreets Ride Planner.xcodeproj/project.pbxproj" "CycleStreets Ride Planner.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
