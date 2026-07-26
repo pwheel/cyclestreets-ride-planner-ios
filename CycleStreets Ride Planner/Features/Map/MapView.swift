@@ -91,6 +91,9 @@ struct MapView: View {
             }
             Task {
                 await vm.selectPlace(selection.place, as: selection.role)
+                if vm.fromPlace != nil && vm.toPlace != nil {
+                    isSearchFieldFocused = false
+                }
                 pendingPlaceSelection = nil
             }
         }
@@ -233,6 +236,11 @@ struct MapView: View {
                 span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
             ))
         }
-        Task { await vm.selectPlace(place, as: role) }
+        Task {
+            await vm.selectPlace(place, as: role)
+            if vm.fromPlace != nil && vm.toPlace != nil {
+                isSearchFieldFocused = false
+            }
+        }
     }
 }
