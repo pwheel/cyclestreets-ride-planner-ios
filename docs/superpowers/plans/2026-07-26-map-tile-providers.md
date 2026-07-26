@@ -886,7 +886,7 @@ git commit -m "feat: add the map style picker sheet"
 
 **Interfaces:** none — confirmed unreferenced anywhere in the app or test target (only its own definition matched a repo-wide grep).
 
-- [ ] **Step 1: Delete the file and confirm nothing references it**
+- [x] **Step 1: Delete the file and confirm nothing references it**
 
 ```bash
 git rm "CycleStreets Ride Planner/Features/Map/RoutePolyline.swift"
@@ -894,14 +894,14 @@ grep -rn "RoutePolyline" "CycleStreets Ride Planner" "CycleStreets Ride PlannerT
 ```
 Expected: the grep returns nothing.
 
-- [ ] **Step 2: Build-verify**
+- [x] **Step 2: Build-verify**
 
 ```bash
 xcodebuild build -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation
 ```
 Expected: `** BUILD SUCCEEDED **` (confirms it really was unused).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git commit -m "chore: remove dead RoutePolyline (superseded by SwiftUI's MapPolyline)"
