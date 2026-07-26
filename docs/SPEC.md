@@ -17,6 +17,7 @@ SwiftUI iOS app for planning cycle routes using the CycleStreets API (journey pl
 - Dependency injection: a single `any APIClientProtocol` is exposed via `EnvironmentValues.apiClient` (`App/AppEnvironment.swift`), built once from the bundled API key. Views/ViewModels take it as an init parameter rather than reading `@Environment` deep in the tree, except at the point of construction.
 - Xcode 16+ `PBXFileSystemSynchronizedRootGroup` — new source files placed under a synced folder are auto-included in the target. Don't hand-edit `project.pbxproj` to add files.
 - Testing: **Swift Testing** (`import Testing`, `@Test`, `#expect`), not XCTest, for all unit tests.
+- Map rendering supports two providers, switched via `MapStyleOption` (`Features/Map/MapStyleOption.swift`): Apple's native styles (`MapStyle.standard/.hybrid/.imagery`) via SwiftUI's `Map`, and 3 OpenStreetMap-tile styles (OSM Standard/CyclOSM/Cycle Map) via `MapLibreSwiftUI.MapView` (the `maplibre/swiftui-dsl` SPM package, pinned `v0.25.0`) pointed at a small self-authored MapLibre raster-style JSON. `MapViewModel` is unaware of the distinction — it stays in `MapView.swift`.
 
 ## Screens & ViewModels
 
@@ -31,8 +32,7 @@ The home screen. Search a start/end location (via CycleStreets geocoder, with de
   - `clearRoute()` — resets `routeOptions` to `[]` (plus from/to/search state, as before).
   - `loadJourney(_:)` — populates the map from a journey obtained outside the normal search flow (a reloaded saved route); sets `routeOptions` to a single entry for that journey's own plan (no comparison fetch of the other two plans — reloading a saved route is a distinct flow from fresh planning) and sets `selectedPlan` to match. Synthesizes placeholder from/to `Place`s from the journey's own first/last coordinate since no searched `Place` exists for it.
   - `selectPlace(_:as:)` — assigns a `Place` to `.from`/`.to` (`WaypointRole`); once both are set, calls `planRoute`. Used both by tapping a search result and by the Saved Locations cross-tab hand-off.
-- `MapView`: search bar with From/To segmented picker, results list (tap to select, bookmark icon to save as a Saved Location), map showing one colored polyline per successfully-fetched `RouteOption` (quietest=green, balanced=yellow, fastest=red; the selected plan draws with a heavier stroke), a legend/chip row below the search bar for picking the active plan (tapping a chip sets `selectedPlan`; a chip for a plan whose request failed is dimmed/disabled with a warning glyph), Start/End markers (green/red, matching the CycleStreets mobile website), "Clear" button (also resets the From/To picker to "From"), toolbar link to `ItineraryView` once a route exists. Tapping the map (not the search UI) dismisses the keyboard.
-- `RoutePolyline`: `MKPolyline` subclass, `.from(journey:)` factory.
+- `MapView`: search bar with From/To segmented picker, results list (tap to select, bookmark icon to save as a Saved Location), map showing one colored polyline per successfully-fetched `RouteOption` (quietest=green, balanced=yellow, fastest=red; the selected plan draws with a heavier stroke), a legend/chip row below the search bar for picking the active plan, Start/End markers (green/red), "Clear" button, toolbar link to `ItineraryView` once a route exists. A bottom-right layers button opens `MapStyleSheet`, letting the user pick between 3 Apple styles and 3 OpenStreetMap-tile styles (persisted via `@AppStorage("mapStyle")`); route/marker rendering is duplicated between the Apple (`Map`/`MapPolyline`/`Marker`) and OSM (`MapLibreSwiftUI.MapView`/`ShapeSource`+`LineStyleLayer`/`SymbolStyleLayer`) code paths since they're different underlying APIs. Tapping the map (not the search UI) dismisses the keyboard.
 
 ### Itinerary (`Features/Itinerary/`)
 Turn-by-turn view of a planned `Journey`. `ItineraryViewModel` (plain, not `@Observable`) formats segments into rows (street name, turn instruction, distance, duration) plus totals, respecting the `useMetric` setting. Toolbar: "Save" (names and persists via `SavedRoutesViewModel`) and `GPXExportButton`.
@@ -82,14 +82,18 @@ Reuse this pattern for any future "select something in tab A, act on it in tab B
 
 `Networking/APIKey.swift` loads a key from a bundled `.txt` resource in `Resources/`: `APIKey_live.txt` (gitignored, real key, release builds — resolved when `CYCLESTREETS_ENV == "live"`) or `APIKey_dev.txt` (tracked in git but flagged `git update-index --skip-worktree` so a locally-set real key is never committed; contains a placeholder in the repo's actual history). `AppEnvironment` swallows a load failure to an empty-key client rather than crashing.
 
+Thunderforest tile-provider key follows the identical pattern: `Resources/ThunderforestAPIKey_dev.txt` (tracked, `skip-worktree`, placeholder in history) / `Resources/ThunderforestAPIKey_live.txt` (gitignored). `APIKey.loadThunderforestKey()` shares its file-read/validate logic with `APIKey.load()` via a private `loadKey(named:)` helper.
+
 ## Test coverage
 
-`CycleStreets Ride PlannerTests/`: `Networking/{APIKeyTests, APIClientTests, GeocoderDecoderTests, JourneyPlanDecoderTests, MockAPIClient}`, `Features/{MapViewModelTests, ItineraryViewModelTests, SavedRoutesViewModelTests}`, `Models/JourneyTests`, `Persistence/{RouteStoreTests, LocationStoreTests}`.
+`CycleStreets Ride PlannerTests/`: `Networking/{APIKeyTests, APIClientTests, GeocoderDecoderTests, JourneyPlanDecoderTests, MockAPIClient}`, `Features/{MapViewModelTests, ItineraryViewModelTests, SavedRoutesViewModelTests, MapStyleOptionTests}`, `Models/JourneyTests`, `Persistence/{RouteStoreTests, LocationStoreTests}`.
 
-**Known gaps** (pure-SwiftUI-wiring or genuinely hard-to-unit-test, treated as build-verify-only per project convention): `SavedLocationsViewModel`, `SettingsView`, `GPXExportButton`, `RoutePolyline`, `ItineraryView`, `SavedRoutesView`, `Endpoints`.
+**Known gaps** (pure-SwiftUI-wiring or genuinely hard-to-unit-test, treated as build-verify-only per project convention): `SavedLocationsViewModel`, `SettingsView`, `GPXExportButton`, `ItineraryView`, `SavedRoutesView`, `Endpoints`, `MapStyleSheet`, `MapStyleThumbnail`.
 
 ## Known limitations / roadmap
 
 Not implemented, captured for future design in `docs/superpowers/plans/2026-07-19-roadmap-multi-route-comparison.md`: switchable geocoder provider (CycleStreets vs MapKit, flag-based), editable saved-location names, "Current Location" via device location permissions.
 
 Simultaneous multi-route comparison (quietest/balanced/fastest shown together) is implemented — see the Map screen section above. Design record: `docs/superpowers/specs/2026-07-25-multi-route-comparison-design.md`; implementation plan: `docs/superpowers/plans/2026-07-25-multi-route-comparison.md`.
+
+OSM tile-based map rendering (GitHub #9) is implemented — see the Map screen section above and Architecture. Design record: `docs/superpowers/specs/2026-07-26-map-tile-providers-design.md`.
