@@ -44,7 +44,7 @@ Turn-by-turn view of a planned `Journey`. `ItineraryViewModel` (plain, not `@Obs
 `SavedLocationsViewModel`: `load()`, `save(name:coordinate:)`, `delete(at:)`. No networking dependency. `SavedLocationsView` rows are tappable; a confirmation dialog picks From/To, then hands the `Place` + role to the Map tab.
 
 ### Settings (`Features/Settings/`)
-`@AppStorage`-backed: `"defaultRoutePlan"` (default `.balanced`) — read by `MapView` at construction to seed `MapViewModel`'s initial `selectedPlan` (which of the 3 always-fetched route plans is pre-selected), not which plan is requested; `"useMetric"` (default `true`). Plus an About section (version, links).
+`@AppStorage`-backed: `"defaultRoutePlan"` (default `.balanced`) — read by `MapView` at construction to seed `MapViewModel`'s initial `selectedPlan` (which of the 3 always-fetched route plans is pre-selected), not which plan is requested; `"useMetric"` (default `true`). Plus an About section (version, links). A third `@AppStorage` key, `"mapStyle"` (default `MapStyleOption.appleStandard`), also persists across launches but isn't a Settings-screen toggle — it's read/written directly by `MapView`'s `layersButton`/`MapStyleSheet` picker (see Map screen section above).
 
 ### GPX Export (`Features/GPX/`)
 `GPXExportButton(journeyID:plan:)` downloads via `apiClient.downloadGPX`, writes to a temp file, presents a `UIActivityViewController` share sheet.

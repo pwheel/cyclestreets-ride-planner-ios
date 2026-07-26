@@ -60,9 +60,19 @@ struct MapStyleOptionTests {
     @Test func styleDocumentWritesValidJSONToDisk() throws {
         let document = try #require(MapStyleOption.cyclOSM.mapLibreStyleDocument(thunderforestKey: "unused"))
         let url = try document.writeToTemporaryFile(named: "test-cyclosm-style")
+        defer { try? FileManager.default.removeItem(at: url) }
         let data = try Data(contentsOf: url)
         let roundTripped = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         #expect(roundTripped?["version"] as? Int == 8)
         #expect((roundTripped?["sources"] as? [String: Any])?["raster-tiles"] != nil)
+    }
+
+    @Test func onlyThunderforestBackedStylesRequireAKey() {
+        #expect(MapStyleOption.osmStandard.requiresThunderforestKey)
+        #expect(MapStyleOption.cycleMap.requiresThunderforestKey)
+        #expect(!MapStyleOption.cyclOSM.requiresThunderforestKey)
+        #expect(!MapStyleOption.appleStandard.requiresThunderforestKey)
+        #expect(!MapStyleOption.appleHybrid.requiresThunderforestKey)
+        #expect(!MapStyleOption.appleSatellite.requiresThunderforestKey)
     }
 }

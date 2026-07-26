@@ -28,6 +28,16 @@ enum MapStyleOption: String, CaseIterable, Identifiable {
 
     var isApple: Bool { group == .apple }
 
+    /// `true` for the 2 OSM styles whose tiles are served by Thunderforest and therefore need a
+    /// real API key to load (`.osmStandard`, `.cycleMap`); `false` for CyclOSM (no key needed)
+    /// and all Apple styles.
+    var requiresThunderforestKey: Bool {
+        switch self {
+        case .osmStandard, .cycleMap: return true
+        case .appleStandard, .appleHybrid, .appleSatellite, .cyclOSM: return false
+        }
+    }
+
     var displayName: String {
         switch self {
         case .appleStandard: return "Apple Standard"
@@ -132,6 +142,10 @@ struct MapLibreStyleDocument: Encodable, Equatable {
 
     var version = 8
     var name: String
+    /// A public glyph (font) server, required for any layer (like the waypoint `SymbolStyleLayer`s
+    /// in `MapView`) that sets a `text` label — without it, MapLibre silently fails to fetch the
+    /// glyph ranges needed to draw the text, rather than crashing.
+    var glyphs = "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf"
     var sources: [String: Source]
     var layers: [Layer]
 

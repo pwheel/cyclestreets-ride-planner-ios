@@ -25,6 +25,16 @@ struct MapView: View {
     @AppStorage("mapStyle") private var mapStyleRawValue = MapStyleOption.defaultOption.rawValue
     @Environment(\.thunderforestAPIKey) private var thunderforestAPIKey
 
+    /// Style-JSON file URLs, written once per style (not on every `body` evaluation) by
+    /// `updateOSMStyleCacheIfNeeded()`, keyed by the style they were generated for.
+    @State private var osmStyleURLCache: [MapStyleOption: URL] = [:]
+
+    /// Shared base image for the OSM path's start/end waypoint symbols — hoisted to a static
+    /// constant so it isn't recreated on every `body` evaluation (only `.iconColor` differs
+    /// between the two waypoints).
+    private static let waypointSymbolImage = UIImage(systemName: "mappin.circle.fill")!
+        .withRenderingMode(.alwaysTemplate)
+
     init(apiClient: any APIClientProtocol, pendingJourney: Binding<Journey?>, pendingPlaceSelection: Binding<PendingPlaceSelection?>) {
         let storedRawValue = UserDefaults.standard.string(forKey: "defaultRoutePlan") ?? RoutePlan.balanced.rawValue
         let initialPlan = RoutePlan(rawValue: storedRawValue) ?? .balanced
@@ -47,6 +57,51 @@ struct MapView: View {
         mapLibreCamera = MapView.mapViewCamera(for: region)
     }
 
+    /// Best-effort inverse of `mapViewCamera(for:)`, extracting an `MKCoordinateRegion` from
+    /// whatever `CameraState` MapLibre's camera binding currently holds after a user gesture.
+    /// Handles the two states this feature realistically produces (`.centered`, from gesture
+    /// pans/pinches once the map has moved; `.rect`, our own programmatic bounding-box writes).
+    /// Any other state (user-location tracking, showcase) falls back to `nil`, leaving `position`
+    /// unchanged — this app never puts the OSM map into those states.
+    private static func region(for camera: MapViewCamera) -> MKCoordinateRegion? {
+        switch camera.state {
+        case let .centered(onCoordinate: coordinate, zoom: zoom, pitch: _, pitchRange: _, direction: _):
+            // MapLibre's centered state only carries a zoom level, not a lat/lon span, so this
+            // approximates the visible span from zoom using the standard web-mercator tile size
+            // (256px tiles, world width 360°). It won't exactly match the on-screen viewport
+            // (that depends on the view's pixel size, which isn't available here), but it's
+            // monotonic with zoom and good enough to avoid discarding the user's pan/zoom when
+            // switching rendering paths.
+            let span = 360.0 / pow(2.0, zoom)
+            return MKCoordinateRegion(
+                center: coordinate,
+                span: MKCoordinateSpan(latitudeDelta: span, longitudeDelta: span)
+            )
+        case let .rect(boundingBox: box, edgePadding: _):
+            let center = CLLocationCoordinate2D(
+                latitude: (box.ne.latitude + box.sw.latitude) / 2,
+                longitude: (box.ne.longitude + box.sw.longitude) / 2
+            )
+            let span = MKCoordinateSpan(
+                latitudeDelta: abs(box.ne.latitude - box.sw.latitude),
+                longitudeDelta: abs(box.ne.longitude - box.sw.longitude)
+            )
+            return MKCoordinateRegion(center: center, span: span)
+        default:
+            return nil
+        }
+    }
+
+    /// Writes this style's MapLibre style-JSON to disk once per style change (not on every
+    /// `body` evaluation) and caches its URL, driven by `.task(id: selectedMapStyle)` in `body`.
+    /// A no-op for Apple styles or once the current style is already cached.
+    private func updateOSMStyleCacheIfNeeded() {
+        guard !selectedMapStyle.isApple, osmStyleURLCache[selectedMapStyle] == nil,
+              let document = selectedMapStyle.mapLibreStyleDocument(thunderforestKey: thunderforestAPIKey)
+        else { return }
+        osmStyleURLCache[selectedMapStyle] = try? document.writeToTemporaryFile(named: selectedMapStyle.rawValue)
+    }
+
     private var selectedMapStyle: MapStyleOption {
         get { MapStyleOption(rawValue: mapStyleRawValue) ?? .defaultOption }
         nonmutating set { mapStyleRawValue = newValue.rawValue }
@@ -59,6 +114,7 @@ struct MapView: View {
     var body: some View {
         ZStack(alignment: .top) {
             map
+                .task(id: selectedMapStyle) { updateOSMStyleCacheIfNeeded() }
             VStack(spacing: 0) {
                 searchBar
                 if !vm.searchResults.isEmpty { resultsList }
@@ -134,8 +190,14 @@ struct MapView: View {
     private var map: some View {
         if let appleStyle = selectedMapStyle.appleMapStyle {
             appleMap(style: appleStyle)
-        } else if let document = selectedMapStyle.mapLibreStyleDocument(thunderforestKey: thunderforestAPIKey) {
-            osmMap(document: document)
+        } else if let styleURL = osmStyleURLCache[selectedMapStyle] {
+            osmMap(styleURL: styleURL)
+        } else {
+            // The style JSON hasn't been written yet (or failed to write) — degrade to Apple's
+            // standard style rather than pointing MapLibre at a guaranteed-nonexistent file.
+            // `.task(id: selectedMapStyle)` below populates the cache, which re-evaluates this
+            // view and switches to `osmMap` as soon as it lands.
+            appleMap(style: .standard)
         }
     }
 
@@ -162,10 +224,17 @@ struct MapView: View {
         .mapStyle(style)
         .ignoresSafeArea(edges: .bottom)
         .onTapGesture { isSearchFieldFocused = false }
+        // Keep the OSM-path camera in sync with user-driven Apple-map gestures (pan/zoom/rotate),
+        // not just the 3 programmatic recenters `updateCamera(to:)` already covers — otherwise
+        // switching to an OSM style discards whatever the user just panned to. Only mounted while
+        // an Apple style is active, so this can't fight with the OSM path's own camera sync below.
+        .onMapCameraChange(frequency: .onEnd) { context in
+            mapLibreCamera = MapView.mapViewCamera(for: context.region)
+        }
     }
 
-    private func osmMap(document: MapLibreStyleDocument) -> some View {
-        MapLibreSwiftUI.MapView(styleURL: osmStyleURL(for: document), camera: $mapLibreCamera) {
+    private func osmMap(styleURL: URL) -> some View {
+        MapLibreSwiftUI.MapView(styleURL: styleURL, camera: $mapLibreCamera) {
             for option in nonSelectedRouteOptions {
                 if let journey = option.journey {
                     let source = ShapeSource(identifier: "route-\(option.plan.rawValue)") {
@@ -193,26 +262,46 @@ struct MapView: View {
                 let startSource = ShapeSource(identifier: "waypoint-start") {
                     MLNPointFeature(coordinate: from.clCoordinate)
                 }
+                // `.text("Start")` restores the label the Apple path's `Marker("Start", ...)`
+                // shows (visually, on the map canvas) — see note on `osmMap` re: VoiceOver.
                 SymbolStyleLayer(identifier: "waypoint-start-symbol", source: startSource)
-                    .iconImage(UIImage(systemName: "mappin.circle.fill")!.withRenderingMode(.alwaysTemplate))
+                    .iconImage(MapView.waypointSymbolImage)
                     .iconColor(.systemGreen)
+                    .text("Start")
+                    .textOffset(CGVector(dx: 0, dy: 1.2))
             }
             if let to = vm.toPlace {
                 let endSource = ShapeSource(identifier: "waypoint-end") {
                     MLNPointFeature(coordinate: to.clCoordinate)
                 }
                 SymbolStyleLayer(identifier: "waypoint-end-symbol", source: endSource)
-                    .iconImage(UIImage(systemName: "mappin.circle.fill")!.withRenderingMode(.alwaysTemplate))
+                    .iconImage(MapView.waypointSymbolImage)
                     .iconColor(.systemRed)
+                    .text("End")
+                    .textOffset(CGVector(dx: 0, dy: 1.2))
             }
+        }
+        // Move MapLibre's attribution control out from under the new bottom-right layers button
+        // (which the ODbL/Thunderforest ToS-required attribution must stay visible/tappable
+        // under). Only needed here — Apple's own `Map` has no competing attribution control.
+        .mapControls {
+            CompassView()
+            LogoView()
+            AttributionButton().position(.bottomLeft)
         }
         .ignoresSafeArea(edges: .bottom)
         .onTapGesture { isSearchFieldFocused = false }
-    }
-
-    private func osmStyleURL(for document: MapLibreStyleDocument) -> URL {
-        (try? document.writeToTemporaryFile(named: selectedMapStyle.rawValue))
-            ?? FileManager.default.temporaryDirectory.appendingPathComponent("map-style-fallback.json")
+        // Propagate user-driven OSM-map gestures back to the Apple-path camera, mirroring
+        // `appleMap`'s `.onMapCameraChange` above. Guarded to gesture-originated changes
+        // (`lastReasonForChange != .programmatic`) so this doesn't just re-derive `position` from
+        // our own `updateCamera(to:)`/cache-driven writes to `mapLibreCamera`. Only mounted while
+        // an OSM style is active, so this can't fight with the Apple path's own sync above.
+        .onChange(of: mapLibreCamera) { _, newValue in
+            guard let reason = newValue.lastReasonForChange, reason != .programmatic,
+                  let region = MapView.region(for: newValue)
+            else { return }
+            position = .region(region)
+        }
     }
 
     private func uiColor(for plan: RoutePlan) -> UIColor {
@@ -277,9 +366,10 @@ struct MapView: View {
                 .padding(12)
                 .background(.regularMaterial, in: Circle())
         }
+        .accessibilityLabel("Map style")
         .padding()
         .sheet(isPresented: $isPresentingMapStyleSheet) {
-            MapStyleSheet(selection: mapStyleBinding)
+            MapStyleSheet(selection: mapStyleBinding, thunderforestAPIKey: thunderforestAPIKey)
         }
     }
 
