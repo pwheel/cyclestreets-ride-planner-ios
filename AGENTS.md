@@ -28,6 +28,10 @@ xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStr
 - Real API key: `CycleStreets Ride Planner/Resources/APIKey_dev.txt`, protected via `git update-index --skip-worktree` — not `.gitignore`. Never `git add -f` it or drop the skip-worktree flag.
 - `APIKey_live.txt` is gitignored outright, used for release builds only.
 
+## Branching
+
+Never commit directly to `main`. Use at least a branch for minor work (docs-only tweaks, one-line fixes); prefer a git worktree for everything else, so the change is isolated from whatever else is checked out in the primary working directory.
+
 ## Before finishing any change
 
 Work through `docs/REVIEW_CHECKLIST.md`. In particular: **`docs/SPEC.md` must be updated in the same commit** as any change that adds/removes/materially changes a screen, ViewModel contract, API endpoint, persistence schema, or cross-cutting pattern. This is not optional — an out-of-date spec is worse than no spec, because future agents will trust it.
