@@ -14,7 +14,7 @@
 - `@Observable @MainActor final class` for ViewModels; plain `Codable, Equatable` structs/enums for models. (No ViewModel changes in this plan — `MapViewModel` stays renderer-agnostic.)
 - Don't hand-edit `project.pbxproj` to add/remove *source files* — the synced-folder target picks them up automatically. (SPM package references are the one exception requiring a `project.pbxproj` change, and that must go through Xcode's own "Add Package Dependencies" UI, not a raw text edit — see Task 1.)
 - `docs/SPEC.md` must be updated in the same commit as any change that adds/removes/materially changes a screen, ViewModel contract, or cross-cutting pattern (Task 7).
-- Full suite: `xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17"`.
+- Full suite: `xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation`.
 - **Known pre-existing flake:** `MapViewModelTests/testSearchTextChangedDoesNotSetErrorMessageWhenDebounceFires` occasionally fails under parallel-clone load (confirmed pre-existing, unrelated to this work, passes in isolation). If it's the *only* failure in a full-suite run, re-run with `-only-testing:` for that one test to confirm before treating the run as red.
 - **Naming collision:** the new `MapLibreSwiftUI` package exports a type literally named `MapView` — the same name as this app's own `struct MapView: View` in `Features/Map/MapView.swift`. Inside that file, always write the fully-qualified `MapLibreSwiftUI.MapView(...)` when constructing the MapLibre view; a bare `MapView(...)` there is ambiguous and won't compile.
 - **Missing real Thunderforest key:** unlike the CycleStreets key, there is no existing Thunderforest account/key anywhere in this project's history. Task 2 sets up the `skip-worktree` placeholder plumbing, but "OSM Standard" and "Cycle Map" styles will not actually load tiles until a real key is obtained (free signup at thunderforest.com) and placed in the local `ThunderforestAPIKey_dev.txt`. This doesn't block any coding task — it only limits how much of Task 8's manual verification can be completed for those 2 styles until a real key exists.
@@ -51,7 +51,7 @@ Expected: resolves without error, and a `Package.resolved` (or equivalent lock s
 
 Then:
 ```bash
-xcodebuild build -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17"
+xcodebuild build -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation
 ```
 Expected: `** BUILD SUCCEEDED **` (no source changes yet, just confirming the new dependency links cleanly).
 
@@ -93,7 +93,7 @@ Add to `CycleStreets Ride PlannerTests/Networking/APIKeyTests.swift` (existing f
 
 Run:
 ```bash
-xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -only-testing:"CycleStreets Ride PlannerTests/APIKeyTests/testThunderforestAPIKeyLoadsFromBundle"
+xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation -only-testing:"CycleStreets Ride PlannerTests/APIKeyTests/testThunderforestAPIKeyLoadsFromBundle"
 ```
 Expected: **build failure** — `APIKey.loadThunderforestKey()` doesn't exist yet. (A compile error is the correct "red" here, same as this codebase's other Swift Testing TDD steps where the method under test doesn't exist yet.)
 
@@ -158,7 +158,7 @@ enum APIKey {
 - [ ] **Step 6: Run test to verify it passes**
 
 ```bash
-xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -only-testing:"CycleStreets Ride PlannerTests/APIKeyTests"
+xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation -only-testing:"CycleStreets Ride PlannerTests/APIKeyTests"
 ```
 Expected: both `APIKeyTests` pass (`testAPIKeyLoadsFromBundle` unaffected, new `testThunderforestAPIKeyLoadsFromBundle` green).
 
@@ -184,7 +184,7 @@ extension EnvironmentValues {
 - [ ] **Step 8: Full-file build-verify**
 
 ```bash
-xcodebuild build -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17"
+xcodebuild build -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation
 ```
 Expected: `** BUILD SUCCEEDED **`.
 
@@ -287,7 +287,7 @@ struct MapStyleOptionTests {
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```bash
-xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -only-testing:"CycleStreets Ride PlannerTests/MapStyleOptionTests"
+xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation -only-testing:"CycleStreets Ride PlannerTests/MapStyleOptionTests"
 ```
 Expected: build failure — `MapStyleOption` doesn't exist yet.
 
@@ -448,7 +448,7 @@ Note: `Color` here is `SwiftUI.Color` — add `import SwiftUI` alongside `import
 - [ ] **Step 4: Run tests to verify they pass**
 
 ```bash
-xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -only-testing:"CycleStreets Ride PlannerTests/MapStyleOptionTests"
+xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation -only-testing:"CycleStreets Ride PlannerTests/MapStyleOptionTests"
 ```
 Expected: all tests pass.
 
@@ -755,7 +755,7 @@ Then add this private computed property alongside `legendRow`/`searchBar`:
 
 This won't fully build until `MapStyleSheet` exists (Task 5) — proceed directly to Task 5, then come back and run:
 ```bash
-xcodebuild build -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17"
+xcodebuild build -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation
 ```
 Expected: `** BUILD SUCCEEDED **`.
 
@@ -866,7 +866,7 @@ struct MapStyleSheet: View {
 - [ ] **Step 3: Build-verify (this also completes Task 4's build)**
 
 ```bash
-xcodebuild build -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17"
+xcodebuild build -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation
 ```
 Expected: `** BUILD SUCCEEDED **`.
 
@@ -897,7 +897,7 @@ Expected: the grep returns nothing.
 - [ ] **Step 2: Build-verify**
 
 ```bash
-xcodebuild build -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17"
+xcodebuild build -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation
 ```
 Expected: `** BUILD SUCCEEDED **` (confirms it really was unused).
 
@@ -1043,7 +1043,7 @@ git commit -m "docs: document the map tile provider architecture in SPEC.md and 
 - [ ] **Step 1: Run the full test suite**
 
 ```bash
-xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17"
+xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation
 ```
 Expected: all green. If the only failure is `MapViewModelTests/testSearchTextChangedDoesNotSetErrorMessageWhenDebounceFires`, re-run just that test in isolation (`-only-testing:` flag) per the Global Constraints note above before treating the suite as red — it's a confirmed pre-existing flake unrelated to this work.
 

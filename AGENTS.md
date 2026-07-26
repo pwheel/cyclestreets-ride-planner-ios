@@ -7,9 +7,10 @@ SwiftUI/MVVM iOS app for planning cycle routes via the CycleStreets API, with lo
 ## Build & test
 
 ```
-xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17"
+xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation
 ```
 
+- **`-skipMacroValidation` is required**, not optional, once the `maplibre/swiftui-dsl` package (added for OSM map tile rendering) is present: it ships a Swift Macro, and without this flag `xcodebuild` fails with "Macro ... must be enabled before it can be used" — a one-time interactive Xcode trust prompt that a CLI build can never satisfy. Add the flag to every `xcodebuild build`/`test` invocation, not just the one above.
 - The simulator must be named exactly `iPhone 17` on this machine (`iPhone 16` isn't available) — check `xcrun simctl list devices` if the destination fails and adjust.
 - **Stale incremental build gotcha:** `xcodebuild` has been observed to silently skip recompiling a changed test file, causing a rerun to report the *old* pass/fail state. If a newly-added test doesn't appear in the output, or a bug you just fixed still fails identically, compare the `.xctest` bundle's mtime (under `DerivedData/.../Products/Debug-iphonesimulator/*.app/PlugIns/*.xctest`) against your source file's mtime. If the bundle is older, `touch` the changed file(s) and rerun.
 - Full-suite runs spin up 2–3 simulator "clones" for parallel testing — this is normal `xcodebuild` behavior, not a hang. Don't manually close/kill clones; let `xcodebuild` manage them.
