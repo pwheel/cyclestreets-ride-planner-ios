@@ -78,7 +78,7 @@ git commit -m "build: add maplibre/swiftui-dsl package dependency (v0.25.0)"
 - Produces: `APIKey.loadThunderforestKey() throws -> String`, `EnvironmentValues.thunderforestAPIKey: String` (empty string if the key fails to load, mirroring the existing CycleStreets-key fallback behavior).
 - Consumes: nothing new — mirrors the existing `APIKey.load()` pattern in the same file.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `CycleStreets Ride PlannerTests/Networking/APIKeyTests.swift` (existing file — add alongside the existing `testAPIKeyLoadsFromBundle`):
 
@@ -89,7 +89,7 @@ Add to `CycleStreets Ride PlannerTests/Networking/APIKeyTests.swift` (existing f
     }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 ```bash
@@ -97,7 +97,7 @@ xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStr
 ```
 Expected: **build failure** — `APIKey.loadThunderforestKey()` doesn't exist yet. (A compile error is the correct "red" here, same as this codebase's other Swift Testing TDD steps where the method under test doesn't exist yet.)
 
-- [ ] **Step 3: Create the placeholder key resource file**
+- [x] **Step 3: Create the placeholder key resource file**
 
 Create `CycleStreets Ride Planner/Resources/ThunderforestAPIKey_dev.txt` with exactly this content (a placeholder, mirroring `APIKey_dev.txt`'s existing placeholder convention):
 
@@ -107,7 +107,7 @@ YOUR_THUNDERFOREST_API_KEY_HERE
 
 This lands under `Resources/`, an existing `PBXFileSystemSynchronizedRootGroup`-synced folder, so it's auto-included in the app target — no `project.pbxproj` edit needed.
 
-- [ ] **Step 4: Add the live-key gitignore entries**
+- [x] **Step 4: Add the live-key gitignore entries**
 
 In `.gitignore`, alongside the existing lines 10-11, add:
 
@@ -116,7 +116,7 @@ Resources/ThunderforestAPIKey_live.txt
 **/Resources/ThunderforestAPIKey_live.txt
 ```
 
-- [ ] **Step 5: Refactor `APIKey.swift`**
+- [x] **Step 5: Refactor `APIKey.swift`**
 
 Replace the full contents of `CycleStreets Ride Planner/Networking/APIKey.swift` with:
 
@@ -155,7 +155,7 @@ enum APIKey {
 
 (`load()`'s behavior/signature is unchanged — same `APIKeyFileName` Info.plist override, same dev/live selection — only the shared file-read/trim/validate logic moved into the new private `loadKey(named:)`, reused by both key loaders.)
 
-- [ ] **Step 6: Run test to verify it passes**
+- [x] **Step 6: Run test to verify it passes**
 
 ```bash
 xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation -only-testing:"CycleStreets Ride PlannerTests/APIKeyTests"
@@ -164,7 +164,7 @@ Expected: both `APIKeyTests` pass (`testAPIKeyLoadsFromBundle` unaffected, new `
 
 If it doesn't show up as run at all, check the `.xctest` bundle mtime against `APIKeyTests.swift`'s mtime per `CLAUDE.md`'s stale-incremental-build note, and `touch` the test file if stale.
 
-- [ ] **Step 7: Wire the environment value**
+- [x] **Step 7: Wire the environment value**
 
 Modify `CycleStreets Ride Planner/App/AppEnvironment.swift` — add alongside the existing `APIClientKey`/`EnvironmentValues.apiClient`:
 
@@ -181,14 +181,14 @@ extension EnvironmentValues {
 }
 ```
 
-- [ ] **Step 8: Full-file build-verify**
+- [x] **Step 8: Full-file build-verify**
 
 ```bash
 xcodebuild build -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation
 ```
 Expected: `** BUILD SUCCEEDED **`.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add "CycleStreets Ride Planner/Networking/APIKey.swift" "CycleStreets Ride Planner/App/AppEnvironment.swift" "CycleStreets Ride Planner/Resources/ThunderforestAPIKey_dev.txt" "CycleStreets Ride PlannerTests/Networking/APIKeyTests.swift" .gitignore
@@ -210,7 +210,7 @@ git update-index --skip-worktree "CycleStreets Ride Planner/Resources/Thunderfor
 - Produces: `enum MapStyleOption: String, CaseIterable, Identifiable` with `.group`, `.isApple`, `.displayName`, `.thumbnailColor`, `.thumbnailSymbolName`, `.appleMapStyle: MapStyle?`, `.mapLibreStyleDocument(thunderforestKey:) -> MapLibreStyleDocument?`, and static `.defaultOption`. Also `struct MapLibreStyleDocument: Encodable, Equatable` with `.writeToTemporaryFile(named:) throws -> URL`.
 - Consumes: `MapKit.MapStyle` (Apple's native style type).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `CycleStreets Ride PlannerTests/Features/MapStyleOptionTests.swift`:
 
@@ -284,14 +284,14 @@ struct MapStyleOptionTests {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation -only-testing:"CycleStreets Ride PlannerTests/MapStyleOptionTests"
 ```
 Expected: build failure — `MapStyleOption` doesn't exist yet.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `CycleStreets Ride Planner/Features/Map/MapStyleOption.swift`:
 
@@ -445,14 +445,14 @@ struct MapLibreStyleDocument: Encodable, Equatable {
 
 Note: `Color` here is `SwiftUI.Color` — add `import SwiftUI` alongside `import MapKit` at the top of the file.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation -only-testing:"CycleStreets Ride PlannerTests/MapStyleOptionTests"
 ```
 Expected: all tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add "CycleStreets Ride Planner/Features/Map/MapStyleOption.swift" "CycleStreets Ride PlannerTests/Features/MapStyleOptionTests.swift"
@@ -472,7 +472,7 @@ git commit -m "feat: add MapStyleOption model with MapLibre raster style-documen
 
 This task is pure SwiftUI wiring — build-verify-only per this project's test-coverage convention (see `docs/SPEC.md` → Test coverage), same bucket as the existing legend row/marker code it sits alongside.
 
-- [ ] **Step 1: Add imports**
+- [x] **Step 1: Add imports**
 
 At the top of `CycleStreets Ride Planner/Features/Map/MapView.swift`, change:
 ```swift
@@ -488,7 +488,7 @@ import MapLibreSwiftDSL
 import MapLibreSwiftUI
 ```
 
-- [ ] **Step 2: Replace the camera/position state with a shared region-driven helper**
+- [x] **Step 2: Replace the camera/position state with a shared region-driven helper**
 
 Replace:
 ```swift
@@ -540,7 +540,7 @@ Then add these as new private members of `MapView` (near the other private helpe
     }
 ```
 
-- [ ] **Step 3: Replace the 3 direct `position = .region(...)` assignments with `updateCamera(to:)`**
+- [x] **Step 3: Replace the 3 direct `position = .region(...)` assignments with `updateCamera(to:)`**
 
 In `.onChange(of: pendingJourney)`, replace:
 ```swift
@@ -599,7 +599,7 @@ with:
         }
 ```
 
-- [ ] **Step 4: Split `map` into an Apple branch and an OSM branch**
+- [x] **Step 4: Split `map` into an Apple branch and an OSM branch**
 
 Replace the existing `private var map: some View { Map(position: $position) { ... } ... }` block entirely with:
 
@@ -700,7 +700,7 @@ Replace the existing `private var map: some View { Map(position: $position) { ..
 
 (`color(for:) -> Color`, used by `legendRow`, is untouched — `uiColor(for:)` is the OSM-path equivalent since `LineStyleLayer.lineColor(_:)` takes `UIColor`, not SwiftUI `Color`.)
 
-- [ ] **Step 5: Add the layers button and sheet**
+- [x] **Step 5: Add the layers button and sheet**
 
 In `body`, change:
 ```swift
@@ -751,7 +751,7 @@ Then add this private computed property alongside `legendRow`/`searchBar`:
     }
 ```
 
-- [ ] **Step 6: Build-verify**
+- [x] **Step 6: Build-verify**
 
 This won't fully build until `MapStyleSheet` exists (Task 5) — proceed directly to Task 5, then come back and run:
 ```bash
@@ -759,7 +759,7 @@ xcodebuild build -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleSt
 ```
 Expected: `** BUILD SUCCEEDED **`.
 
-- [ ] **Step 7: Commit** (after Task 5's files exist, so the commit builds cleanly on its own)
+- [x] **Step 7: Commit** (after Task 5's files exist, so the commit builds cleanly on its own)
 
 ```bash
 git add "CycleStreets Ride Planner/Features/Map/MapView.swift"
@@ -780,7 +780,7 @@ git commit -m "feat: render OSM map styles via MapLibre alongside Apple's MapKit
 
 Pure SwiftUI wiring — build-verify-only, per this project's test-coverage convention. (Note: thumbnails are small SwiftUI-rendered color/symbol swatches, not bundled screenshot images — cheap to render statically like a bundled image would be, but need no asset-catalog entries or manual screenshot capture, and can't go visually stale relative to the real tile styles the way a captured screenshot could.)
 
-- [ ] **Step 1: Create `MapStyleThumbnail.swift`**
+- [x] **Step 1: Create `MapStyleThumbnail.swift`**
 
 ```swift
 import SwiftUI
@@ -801,7 +801,7 @@ struct MapStyleThumbnail: View {
 }
 ```
 
-- [ ] **Step 2: Create `MapStyleSheet.swift`**
+- [x] **Step 2: Create `MapStyleSheet.swift`**
 
 ```swift
 import SwiftUI
@@ -863,14 +863,14 @@ struct MapStyleSheet: View {
 }
 ```
 
-- [ ] **Step 3: Build-verify (this also completes Task 4's build)**
+- [x] **Step 3: Build-verify (this also completes Task 4's build)**
 
 ```bash
 xcodebuild build -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation
 ```
 Expected: `** BUILD SUCCEEDED **`.
 
-- [ ] **Step 4: Commit** (this commit plus Task 4's — do Task 4's Step 7 commit now if not already done)
+- [x] **Step 4: Commit** (this commit plus Task 4's — do Task 4's Step 7 commit now if not already done)
 
 ```bash
 git add "CycleStreets Ride Planner/Features/Map/MapStyleSheet.swift" "CycleStreets Ride Planner/Features/Map/MapStyleThumbnail.swift"
