@@ -14,6 +14,7 @@ import CoreLocation
 /// parallelism, so a fixed sleep margin is unreliable under CI's variable
 /// CPU contention — condition-based waiting is deterministic regardless of
 /// scheduling delay.
+@MainActor
 private func waitUntil(
     timeout: Duration = .seconds(5),
     pollInterval: Duration = .milliseconds(10),
