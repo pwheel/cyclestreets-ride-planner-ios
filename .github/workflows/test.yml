@@ -1,0 +1,35 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure Xcode 26.5 is selected
+        run: |
+          current=$(xcode-select -p)
+          echo "Default Xcode developer dir: $current"
+          if [[ "$current" != *"Xcode_26.5"* ]]; then
+            echo "Switching to Xcode 26.5"
+            sudo xcode-select -s /Applications/Xcode_26.5.app
+          fi
+          xcodebuild -version
+
+      - name: Run test suite
+        run: |
+          xcodebuild test \
+            -project "CycleStreets Ride Planner.xcodeproj" \
+            -scheme "CycleStreets Ride Planner" \
+            -destination "platform=iOS Simulator,name=iPhone 17"
