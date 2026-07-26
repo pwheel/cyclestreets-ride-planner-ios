@@ -1040,17 +1040,17 @@ git commit -m "docs: document the map tile provider architecture in SPEC.md and 
 
 **Files:** none — verification only.
 
-- [ ] **Step 1: Run the full test suite**
+- [x] **Step 1: Run the full test suite**
 
 ```bash
 xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation
 ```
 Expected: all green. If the only failure is `MapViewModelTests/testSearchTextChangedDoesNotSetErrorMessageWhenDebounceFires`, re-run just that test in isolation (`-only-testing:` flag) per the Global Constraints note above before treating the suite as red — it's a confirmed pre-existing flake unrelated to this work.
 
-- [ ] **Step 2: Manual simulator check**
+- [x] **Step 2: Manual simulator check**
 
 Launch the app in the iPhone 17 simulator. Tap the bottom-right layers button — confirm the sheet opens with 6 rows grouped Apple/OpenStreetMap, each with a distinct colored thumbnail, and a checkmark on "Apple Standard" (the default). Switch to each Apple style (Standard/Hybrid/Satellite) — confirm the base map visibly changes and existing route-planning still works (search, plan a route, see 3 colored polylines + legend + Start/End markers). Switch to "CyclOSM" — confirm OSM-style tiles render (no Thunderforest key needed) with an attribution control visible, and that a previously-planned route's polylines/markers still show on top of it. If a real Thunderforest key has been placed in `ThunderforestAPIKey_dev.txt` by this point, also check "OSM Standard" and "Cycle Map" render real tiles; otherwise confirm they at least don't crash (an empty/gray map from a failed tile fetch is the expected degraded state without a real key). Relaunch the app and confirm the last-selected style persisted.
 
-- [ ] **Step 3: Final review pass**
+- [x] **Step 3: Final review pass**
 
 Work through `docs/REVIEW_CHECKLIST.md` end to end (tests, SPEC.md accuracy, historical record, secrets, commit hygiene) before considering this plan done.
