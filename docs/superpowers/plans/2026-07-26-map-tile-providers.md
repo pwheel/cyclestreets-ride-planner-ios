@@ -917,7 +917,7 @@ git commit -m "chore: remove dead RoutePolyline (superseded by SwiftUI's MapPoly
 
 **Interfaces:** none — docs only.
 
-- [ ] **Step 1: Update `docs/SPEC.md`**
+- [x] **Step 1: Update `docs/SPEC.md`**
 
 In the **Architecture** section, add a bullet after the DI bullet:
 ```markdown
@@ -942,7 +942,7 @@ In **Known limitations / roadmap**, remove/replace the line that pointed at the 
 OSM tile-based map rendering (GitHub #9) is implemented — see the Map screen section above and Architecture. Design record: `docs/superpowers/specs/2026-07-26-map-tile-providers-design.md`.
 ```
 
-- [ ] **Step 2: Write the design doc**
+- [x] **Step 2: Write the design doc**
 
 Create `docs/superpowers/specs/2026-07-26-map-tile-providers-design.md`, mirroring the structure of `docs/superpowers/specs/2026-07-25-multi-route-comparison-design.md`:
 
@@ -1027,7 +1027,7 @@ CyclOSM requires no key and works immediately.
 `docs/REVIEW_CHECKLIST.md`.
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs/SPEC.md docs/superpowers/specs/2026-07-26-map-tile-providers-design.md
