@@ -18,20 +18,22 @@ struct MapStyleSheet: View {
         MapStyleOption.allCases.filter { $0.group == .apple }
     }
 
+    /// CyclOSM first (the recommended default), then Cycle Map, then OSM Standard —
+    /// an explicit order independent of `MapStyleOption`'s declaration order.
     private var osmOptions: [MapStyleOption] {
-        MapStyleOption.allCases.filter { $0.group == .openStreetMap }
+        [.cyclOSM, .cycleMap, .osmStandard]
     }
 
     var body: some View {
         NavigationStack {
             List {
-                Section("Apple") {
-                    ForEach(appleOptions) { option in
+                Section("OpenStreetMap") {
+                    ForEach(osmOptions) { option in
                         row(for: option)
                     }
                 }
-                Section("OpenStreetMap") {
-                    ForEach(osmOptions) { option in
+                Section("Apple") {
+                    ForEach(appleOptions) { option in
                         row(for: option)
                     }
                 }
@@ -59,6 +61,11 @@ struct MapStyleSheet: View {
                     HStack(spacing: 4) {
                         Text(option.displayName)
                             .foregroundStyle(.primary)
+                        if option == .cyclOSM {
+                            Text("(Recommended)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                         if unavailable {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundStyle(.secondary)

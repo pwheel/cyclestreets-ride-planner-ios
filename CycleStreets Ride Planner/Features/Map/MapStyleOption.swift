@@ -15,7 +15,7 @@ enum MapStyleOption: String, CaseIterable, Identifiable {
     case cyclOSM
     case cycleMap
 
-    static let defaultOption: MapStyleOption = .appleStandard
+    static let defaultOption: MapStyleOption = .cyclOSM
 
     var id: String { rawValue }
 
