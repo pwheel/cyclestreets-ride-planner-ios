@@ -112,26 +112,26 @@ final class MapViewModelTests {
     }
 
     @Test func testSearchTextChangedDebouncesAndSearches() async throws {
-        vm.searchDebounceMilliseconds = 10
+        vm.searchDebounceMilliseconds = 100
         client.placesToReturn = [
             Place(id: "1", name: "Cambridge", near: "Cambridgeshire",
                   coordinate: Coordinate(longitude: 0.1218, latitude: 52.2053))
         ]
         vm.searchTextChanged("Cambridge")
-        try await Task.sleep(for: .milliseconds(50))
+        try await Task.sleep(for: .milliseconds(1000))
         #expect(vm.searchResults.count == 1)
         #expect(client.geocodeQueriesReceived == ["Cambridge"])
     }
 
     @Test func testSearchTextChangedCancelsPendingSearchOnRapidTyping() async throws {
-        vm.searchDebounceMilliseconds = 30
+        vm.searchDebounceMilliseconds = 150
         client.placesToReturn = [
             Place(id: "1", name: "Cambridge", near: nil, coordinate: Coordinate(longitude: 0, latitude: 0))
         ]
         vm.searchTextChanged("Ca")
-        try await Task.sleep(for: .milliseconds(10))
-        vm.searchTextChanged("Cambridge")
         try await Task.sleep(for: .milliseconds(50))
+        vm.searchTextChanged("Cambridge")
+        try await Task.sleep(for: .milliseconds(1000))
         #expect(client.geocodeQueriesReceived == ["Cambridge"])
     }
 

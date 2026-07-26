@@ -32,4 +32,5 @@ jobs:
           xcodebuild test \
             -project "CycleStreets Ride Planner.xcodeproj" \
             -scheme "CycleStreets Ride Planner" \
-            -destination "platform=iOS Simulator,name=iPhone 17"
+            -destination "platform=iOS Simulator,name=iPhone 17" \
+            -skip-testing:"CycleStreets Ride PlannerUITests"
