@@ -9,7 +9,7 @@ struct MapStyleSheet: View {
 
     /// `true` when a style needing a Thunderforest key can't actually load tiles right now —
     /// the key failed to load (empty) or is still the tracked placeholder value.
-    private func isDegraded(_ option: MapStyleOption) -> Bool {
+    private func isUnavailable(_ option: MapStyleOption) -> Bool {
         option.requiresThunderforestKey
             && (thunderforestAPIKey.isEmpty || thunderforestAPIKey == Self.placeholderThunderforestKey)
     }
@@ -48,7 +48,7 @@ struct MapStyleSheet: View {
     }
 
     private func row(for option: MapStyleOption) -> some View {
-        let degraded = isDegraded(option)
+        let unavailable = isUnavailable(option)
         return Button {
             selection = option
             dismiss()
@@ -59,13 +59,13 @@ struct MapStyleSheet: View {
                     HStack(spacing: 4) {
                         Text(option.displayName)
                             .foregroundStyle(.primary)
-                        if degraded {
+                        if unavailable {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    if degraded {
-                        Text("Requires a Thunderforest API key — see docs/SPEC.md")
+                    if unavailable {
+                        Text("Map style misconfigured")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -76,7 +76,7 @@ struct MapStyleSheet: View {
                         .foregroundStyle(.tint)
                 }
             }
-            .opacity(degraded ? 0.6 : 1)
+            .opacity(unavailable ? 0.6 : 1)
         }
     }
 }
