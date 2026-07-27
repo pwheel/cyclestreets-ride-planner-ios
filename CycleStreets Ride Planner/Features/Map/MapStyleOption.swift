@@ -142,10 +142,6 @@ struct MapLibreStyleDocument: Encodable, Equatable {
 
     var version = 8
     var name: String
-    /// A public glyph (font) server, required for any layer (like the waypoint `SymbolStyleLayer`s
-    /// in `MapView`) that sets a `text` label — without it, MapLibre silently fails to fetch the
-    /// glyph ranges needed to draw the text, rather than crashing.
-    var glyphs = "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf"
     var sources: [String: Source]
     var layers: [Layer]
 

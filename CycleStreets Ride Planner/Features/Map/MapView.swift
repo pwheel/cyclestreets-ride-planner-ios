@@ -262,13 +262,15 @@ struct MapView: View {
                 let startSource = ShapeSource(identifier: "waypoint-start") {
                     MLNPointFeature(coordinate: from.clCoordinate)
                 }
-                // `.text("Start")` restores the label the Apple path's `Marker("Start", ...)`
-                // shows (visually, on the map canvas) — see note on `osmMap` re: VoiceOver.
+                // No `.text(...)` label here (unlike the Apple path's `Marker("Start", ...)`):
+                // MapLibre/Mapbox GL suppresses a symbol's icon entirely if its text can't be
+                // rendered (e.g. a glyph-server fetch failure), which is exactly what broke these
+                // markers when a `.text("Start")` + external glyphs URL were added in an earlier
+                // pass — confirmed by removing them and observing the icons reappear. Not worth
+                // re-attempting for a cosmetic label given that fragility.
                 SymbolStyleLayer(identifier: "waypoint-start-symbol", source: startSource)
                     .iconImage(MapView.waypointSymbolImage)
                     .iconColor(.systemGreen)
-                    .text("Start")
-                    .textOffset(CGVector(dx: 0, dy: 1.2))
             }
             if let to = vm.toPlace {
                 let endSource = ShapeSource(identifier: "waypoint-end") {
@@ -277,8 +279,6 @@ struct MapView: View {
                 SymbolStyleLayer(identifier: "waypoint-end-symbol", source: endSource)
                     .iconImage(MapView.waypointSymbolImage)
                     .iconColor(.systemRed)
-                    .text("End")
-                    .textOffset(CGVector(dx: 0, dy: 1.2))
             }
         }
         // Move MapLibre's attribution control out from under the new bottom-right layers button
