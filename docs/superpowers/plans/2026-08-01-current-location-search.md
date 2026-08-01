@@ -208,7 +208,7 @@ Then add this test (it will fail to compile because `MapViewModel` has no `useCu
 
 - [ ] **Step 4: Run test to verify it fails**
 
-Run: `xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation -only-testing:CycleStreets_Ride_PlannerTests/MapViewModelTests/testUseCurrentLocationAsFromSetsPlaceNamedCurrentLocation`
+Run: `xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation -only-testing:"CycleStreets Ride PlannerTests/MapViewModelTests/testUseCurrentLocationAsFromSetsPlaceNamedCurrentLocation()"`
 Expected: build FAILS — `MapViewModel` has no member `useCurrentLocation` and no init parameter `locationService`, and `MockLocationService` doesn't exist as a type the test file can resolve against `LocationServiceProtocol` (it does exist as a file, but `MapViewModel`'s init won't accept it yet).
 
 - [ ] **Step 5: Add `locationService` to `MapViewModel` and implement `useCurrentLocation(as:)`**
@@ -299,7 +299,7 @@ Then add this method after `selectPlace(_:as:)` (the last method in the class, j
 
 - [ ] **Step 6: Run test to verify it passes**
 
-Run: `xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation -only-testing:CycleStreets_Ride_PlannerTests/MapViewModelTests/testUseCurrentLocationAsFromSetsPlaceNamedCurrentLocation`
+Run: `xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation -only-testing:"CycleStreets Ride PlannerTests/MapViewModelTests/testUseCurrentLocationAsFromSetsPlaceNamedCurrentLocation()"`
 Expected: PASS
 
 - [ ] **Step 7: Update `MapView.swift` and `RootView.swift` so the app target still compiles**
@@ -456,7 +456,7 @@ Add these tests to `CycleStreets Ride PlannerTests/Features/MapViewModelTests.sw
 
 - [ ] **Step 11: Run the full `MapViewModelTests` suite**
 
-Run: `xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation -only-testing:CycleStreets_Ride_PlannerTests/MapViewModelTests`
+Run: `xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation -only-testing:"CycleStreets Ride PlannerTests/MapViewModelTests"`
 Expected: ALL PASS — including every pre-existing test (none of them reference `locationService`, so they're unaffected beyond the shared `init()` change from Step 3).
 
 If any test file's result looks stale, compare the `.xctest` bundle mtime under `DerivedData/.../Products/Debug-iphonesimulator/*.app/PlugIns/*.xctest` against the source file's mtime and `touch` the source file if the bundle is newer, then rerun.
