@@ -7,9 +7,11 @@ SwiftUI/MVVM iOS app for planning cycle routes via the CycleStreets API, with lo
 ## Build & test
 
 ```
-xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17"
+xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation
 ```
 
+- **`-skipMacroValidation` is required**, not optional, once the `maplibre/swiftui-dsl` package (added for OSM map tile rendering) is present: it ships a Swift Macro, and without this flag `xcodebuild` fails with "Macro ... must be enabled before it can be used" — a one-time interactive Xcode trust prompt that a CLI build can never satisfy. Add the flag to every `xcodebuild build`/`test` invocation (including CI's), not just the one above.
+- **Supply-chain note:** `-skipMacroValidation` is a blanket, all-or-nothing bypass — there is no way to trust only a specific package's macro while still gating others. The actual remaining control is `project.pbxproj`'s exact-version pin (`swiftui-dsl` @ `0.25.0`, not a version range) plus the committed `Package.resolved`: a malicious/compromised macro could only enter the dependency graph via a version bump that shows up as a reviewable diff in a PR. Do not loosen that pin to a version range while this flag stays required — doing so would let a transitive dependency update silently start running new, unreviewed compile-time code in CI.
 - The simulator must be named exactly `iPhone 17` on this machine (`iPhone 16` isn't available) — check `xcrun simctl list devices` if the destination fails and adjust.
 - **Stale incremental build gotcha:** `xcodebuild` has been observed to silently skip recompiling a changed test file, causing a rerun to report the *old* pass/fail state. If a newly-added test doesn't appear in the output, or a bug you just fixed still fails identically, compare the `.xctest` bundle's mtime (under `DerivedData/.../Products/Debug-iphonesimulator/*.app/PlugIns/*.xctest`) against your source file's mtime. If the bundle is older, `touch` the changed file(s) and rerun.
 - Full-suite runs spin up 2–3 simulator "clones" for parallel testing — this is normal `xcodebuild` behavior, not a hang. Don't manually close/kill clones; let `xcodebuild` manage them.
@@ -28,6 +30,7 @@ xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStr
 - Real API key: `CycleStreets Ride Planner/Resources/APIKey_dev.txt`, protected via `git update-index --skip-worktree` — not `.gitignore`. Never `git add -f` it or drop the skip-worktree flag.
 - `APIKey_live.txt` is gitignored outright, used for release builds only.
 - **New-worktree gotcha:** `skip-worktree` is per-checkout, so a freshly created worktree checks out the tracked *placeholder* value (`YOUR_API_KEY_HERE`), not the real key from another checkout's working tree. Symptom: every live API call (search, journey planning) fails, and — because the API's error JSON (`{"error": "No valid API key..."}`) doesn't match the expected response shape — it surfaces as a generic decode error ("The data couldn't be read because it was missing") rather than an obviously key-related message. Fix: `cp` the real key file in from another checkout with the real key set, then re-run `git update-index --skip-worktree` on the copy in the new worktree.
+- `Resources/ThunderforestAPIKey_dev.txt`/`ThunderforestAPIKey_live.txt` (the Thunderforest tile-provider key, used by the Map screen's OSM Standard/Cycle Map styles) follow the identical pattern and are subject to the identical rules above — same `skip-worktree` flagging, same never-`git add -f`, and the same new-worktree gotcha (a fresh worktree gets the tracked placeholder `YOUR_THUNDERFOREST_API_KEY_HERE`, not a real key from another checkout).
 
 ## Branching
 

@@ -9,6 +9,8 @@ DerivedData/
 # Keys — never commit real keys
 Resources/APIKey_live.txt
 **/Resources/APIKey_live.txt
+Resources/ThunderforestAPIKey_live.txt
+**/Resources/ThunderforestAPIKey_live.txt
 
 # SPM
 .build/

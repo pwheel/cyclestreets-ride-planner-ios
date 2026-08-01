@@ -13,3 +13,14 @@ extension EnvironmentValues {
         set { self[APIClientKey.self] = newValue }
     }
 }
+
+private struct ThunderforestAPIKeyKey: EnvironmentKey {
+    static let defaultValue: String = (try? APIKey.loadThunderforestKey()) ?? ""
+}
+
+extension EnvironmentValues {
+    var thunderforestAPIKey: String {
+        get { self[ThunderforestAPIKeyKey.self] }
+        set { self[ThunderforestAPIKeyKey.self] = newValue }
+    }
+}

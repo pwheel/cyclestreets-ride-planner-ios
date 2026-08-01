@@ -28,7 +28,7 @@ If none of the above apply, no SPEC.md change is needed — say so explicitly ra
 
 ## 4. Secrets
 
-- [ ] `git diff`/`git status` doesn't introduce a real API key, token, or credential. `Resources/APIKey_dev.txt` must stay `skip-worktree`-flagged — don't `git add -f` it or remove the flag.
+- [ ] `git diff`/`git status` doesn't introduce a real API key, token, or credential. `Resources/APIKey_dev.txt` and `Resources/ThunderforestAPIKey_dev.txt` must stay `skip-worktree`-flagged — don't `git add -f` either or remove the flag.
 
 ## 5. Commit hygiene
 
