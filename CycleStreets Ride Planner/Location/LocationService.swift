@@ -44,6 +44,8 @@ final class LocationService: NSObject, LocationServiceProtocol, CLLocationManage
             throw LocationServiceError.permissionDenied
         case .restricted:
             throw LocationServiceError.restricted
+        case .notDetermined:
+            throw LocationServiceError.unavailable
         @unknown default:
             throw LocationServiceError.permissionDenied
         }
@@ -61,7 +63,9 @@ final class LocationService: NSObject, LocationServiceProtocol, CLLocationManage
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        authContinuation?.resume(returning: manager.authorizationStatus)
+        let status = manager.authorizationStatus
+        guard status != .notDetermined else { return }
+        authContinuation?.resume(returning: status)
         authContinuation = nil
     }
 
