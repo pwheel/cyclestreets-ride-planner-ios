@@ -61,6 +61,15 @@ Turn-by-turn view of a planned `Journey`. `ItineraryViewModel` (plain, not `@Obs
 
 Reuse this pattern for any future "select something in tab A, act on it in tab B" flow rather than hoisting shared view model ownership.
 
+## Location (`Location/LocationService.swift`)
+
+`LocationServiceProtocol` is `@MainActor` + `Sendable`, with the single member `currentLocation() async throws -> CLLocationCoordinate2D`. `LocationService` implements it over `CLLocationManager` (one-shot `requestLocation()`, no continuous tracking), and is the `EnvironmentValues.locationService` default. Four invariants matter if you touch it:
+
+- **Main-actor isolation.** The class is `@MainActor`, so `CLLocationManager` is created on main and therefore delivers its delegate callbacks on main. The three `CLLocationManagerDelegate` methods are declared `nonisolated` (the protocol requirements are non-isolated) and wrap their bodies in `MainActor.assumeIsolated { }`. Don't make them `async`/hop — the continuation state they read and nil out must be mutated from exactly one actor.
+- **One fetch at a time.** `currentLocation()` guards on an `isFetchInFlight` flag and throws `LocationServiceError.alreadyInProgress` for a duplicate call, rather than overwriting (and thereby leaking) the pending `CheckedContinuation`. `MapView` also suppresses repeat taps while `vm.isLoading`; the service-level guard is the backstop.
+- **Bounded authorization wait.** `locationManagerDidChangeAuthorization` deliberately ignores `.notDetermined` callbacks (the system emits them spuriously). Because there is a real state where `.notDetermined` is the *only* callback that will ever arrive — Location Services off device-wide with the app's own status still undetermined — the wait is raced against a 5s timeout task that resumes with `.notDetermined`, which `currentLocation()` maps to `.unavailable`. Keep both the guard and the ceiling.
+- **Error mapping.** `.permissionDenied`/`.restricted` are the "link the user to Settings" cases (including `CLError.denied` from `didFailWithError`, which means Location Services are off system-wide despite an authorized app status). `.notDetermined` and `@unknown default` both map to `.unavailable` — a generic "try again", never a Settings link on a guess.
+
 ## Networking — CycleStreets API contract (as verified live, not as originally planned)
 
 `Networking/Endpoints.swift` builds URLs; `Networking/APIClient.swift` fetches + delegates decoding; `APIClientProtocol`: `planJourney(from:to:plan:)`, `geocode(query:)`, `downloadGPX(journeyID:plan:)`, `reloadJourney(itineraryID:plan:)`.
