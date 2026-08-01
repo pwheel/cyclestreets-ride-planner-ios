@@ -117,7 +117,7 @@ struct MapView: View {
                 .task(id: selectedMapStyle) { updateOSMStyleCacheIfNeeded() }
             VStack(spacing: 0) {
                 searchBar
-                if !vm.searchResults.isEmpty { resultsList }
+                if isSearchFieldFocused { resultsList }
                 if !vm.routeOptions.isEmpty { legendRow.padding(.top, 8) }
             }
             .padding(.top, 8)
@@ -153,6 +153,19 @@ struct MapView: View {
         }
         .alert("Location Saved", isPresented: $isPresentingLocationSavedConfirmation) {
             Button("OK", role: .cancel) {}
+        }
+        .alert("Location Access Needed", isPresented: Binding(
+            get: { vm.isPresentingLocationPermissionAlert },
+            set: { vm.isPresentingLocationPermissionAlert = $0 }
+        )) {
+            Button("Cancel", role: .cancel) {}
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+        } message: {
+            Text("Location access is off. Enable it in Settings to use Current Location.")
         }
         .onChange(of: pendingJourney) { _, newValue in
             guard let journey = newValue else { return }
@@ -402,30 +415,49 @@ struct MapView: View {
     }
 
     private var resultsList: some View {
-        List(vm.searchResults) { place in
-            HStack {
-                Button {
-                    selectPlace(place)
-                } label: {
-                    VStack(alignment: .leading) {
-                        Text(place.name).font(.body)
-                        if let near = place.near {
-                            Text(near).font(.caption).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                useCurrentLocation()
+            } label: {
+                HStack {
+                    Image(systemName: "location.fill")
+                    Text("Current Location")
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical, 10)
+            .padding(.horizontal)
+
+            if !vm.searchResults.isEmpty {
+                Divider()
+                List(vm.searchResults) { place in
+                    HStack {
+                        Button {
+                            selectPlace(place)
+                        } label: {
+                            VStack(alignment: .leading) {
+                                Text(place.name).font(.body)
+                                if let near = place.near {
+                                    Text(near).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
                         }
+                        Spacer()
+                        Button {
+                            savedLocationsVM.save(name: place.name, coordinate: place.coordinate)
+                            isPresentingLocationSavedConfirmation = true
+                        } label: {
+                            Image(systemName: "bookmark")
+                        }
+                        .buttonStyle(.borderless)
                     }
                 }
-                Spacer()
-                Button {
-                    savedLocationsVM.save(name: place.name, coordinate: place.coordinate)
-                    isPresentingLocationSavedConfirmation = true
-                } label: {
-                    Image(systemName: "bookmark")
-                }
-                .buttonStyle(.borderless)
+                .listStyle(.plain)
             }
         }
-        .listStyle(.plain)
-        .frame(maxHeight: 220)
+        .frame(maxHeight: 260)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal)
     }
@@ -443,6 +475,28 @@ struct MapView: View {
         }
         Task {
             await vm.selectPlace(place, as: role)
+            if vm.fromPlace != nil && vm.toPlace != nil {
+                isSearchFieldFocused = false
+            }
+        }
+    }
+
+    private func useCurrentLocation() {
+        searchText = ""
+        vm.searchResults = []
+        let role = selectingFor
+        if role == .from { selectingFor = .to }
+        Task {
+            await vm.useCurrentLocation(as: role)
+            let resolvedPlace = role == .from ? vm.fromPlace : vm.toPlace
+            if let resolvedPlace {
+                withAnimation {
+                    updateCamera(to: MKCoordinateRegion(
+                        center: resolvedPlace.clCoordinate,
+                        span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                    ))
+                }
+            }
             if vm.fromPlace != nil && vm.toPlace != nil {
                 isSearchFieldFocused = false
             }
