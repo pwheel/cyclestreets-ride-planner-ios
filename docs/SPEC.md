@@ -14,7 +14,7 @@ SwiftUI iOS app for planning cycle routes using the CycleStreets API (journey pl
 
 - SwiftUI + MVVM. `@Observable @MainActor final class ...ViewModel` per feature; views hold `@State private var vm: ...ViewModel`.
 - Models are plain `Codable, Equatable` structs/enums (`Journey`, `Segment`, `Coordinate`, `Place`, `SavedRoute`, `SavedLocation`, `RoutePlan`).
-- Dependency injection: a single `any APIClientProtocol` is exposed via `EnvironmentValues.apiClient` (`App/AppEnvironment.swift`), built once from the bundled API key. Views/ViewModels take it as an init parameter rather than reading `@Environment` deep in the tree, except at the point of construction.
+- Dependency injection: a single `any APIClientProtocol` is exposed via `EnvironmentValues.apiClient` (`App/AppEnvironment.swift`), built once from the bundled API key. `EnvironmentValues.locationService` (`any LocationServiceProtocol`, also in `AppEnvironment.swift`) follows the identical pattern. Views/ViewModels take these as init parameters rather than reading `@Environment` deep in the tree, except at the point of construction.
 - Xcode 16+ `PBXFileSystemSynchronizedRootGroup` — new source files placed under a synced folder are auto-included in the target. Don't hand-edit `project.pbxproj` to add files.
 - Testing: **Swift Testing** (`import Testing`, `@Test`, `#expect`), not XCTest, for all unit tests.
 - Map rendering supports two providers, switched via `MapStyleOption` (`Features/Map/MapStyleOption.swift`): Apple's native styles (`MapStyle.standard/.hybrid/.imagery`) via SwiftUI's `Map`, and 3 OpenStreetMap-tile styles (OSM Standard/CyclOSM/Cycle Map) via `MapLibreSwiftUI.MapView` (the `maplibre/swiftui-dsl` SPM package, pinned `v0.25.0`) pointed at a small self-authored MapLibre raster-style JSON. `MapViewModel` is unaware of the distinction — it stays in `MapView.swift`.
@@ -24,7 +24,8 @@ SwiftUI iOS app for planning cycle routes using the CycleStreets API (journey pl
 ### Map (`Features/Map/`)
 The home screen. Search a start/end location (via CycleStreets geocoder, with debounced typeahead), plan a route, view it as a polyline + markers, clear it, or jump to the itinerary.
 
-- `MapViewModel`: `searchResults`, `fromPlace`/`toPlace`, `routeOptions`, `selectedPlan`, `currentJourney`, `isLoading`, `errorMessage`.
+- `MapViewModel`: `searchResults`, `fromPlace`/`toPlace`, `routeOptions`, `selectedPlan`, `currentJourney`, `isLoading`, `errorMessage`, `isPresentingLocationPermissionAlert`.
+  - `useCurrentLocation(as:)` — fetches the device's current location via `LocationServiceProtocol` (requesting "when in use" authorization in-context on first use, not at launch) and assigns it to the given `WaypointRole` as a `Place` named literally `"Current Location"` (no reverse geocoding), reusing `selectPlace(_:as:)` so planning/markers/itinerary behave identically to a searched place. On `.permissionDenied`/`.restricted` sets `isPresentingLocationPermissionAlert` instead of `errorMessage`, so the UI can offer a direct link to Settings; other failures set `errorMessage`. This `Place` is deliberately never added to `searchResults`, so it can never be bookmarked into `SavedLocation` storage under a name that goes stale.
   - `routeOptions: [RouteOption]` — always 3 entries after a plan attempt (`.quietest, .balanced, .fastest` order), each holding that plan's `journey: Journey?`, `errorMessage: String?`, and computed `failed: Bool` (`journey == nil`) — the single source of truth for "this plan's request failed", used by `MapView`'s legend chip rather than re-deriving it from `journey`/`errorMessage` separately. `currentJourney` is computed from `routeOptions.first { $0.plan == selectedPlan }?.journey` — feeds `ItineraryView`, Save, and GPX export exactly as before.
   - `search(query:)` — immediate geocode; ignores cancellation errors (a superseded in-flight request from a stale keystroke is not a user-facing error — see `searchTextChanged`).
   - `searchTextChanged(_:)` — debounced (default 300ms, `searchDebounceMilliseconds` is injectable for tests) typeahead; cancels the prior pending search on each new keystroke.
@@ -86,9 +87,9 @@ Thunderforest tile-provider key follows the identical pattern: `Resources/Thunde
 
 ## Test coverage
 
-`CycleStreets Ride PlannerTests/`: `Networking/{APIKeyTests, APIClientTests, GeocoderDecoderTests, JourneyPlanDecoderTests, MockAPIClient}`, `Features/{MapViewModelTests, ItineraryViewModelTests, SavedRoutesViewModelTests, MapStyleOptionTests}`, `Models/JourneyTests`, `Persistence/{RouteStoreTests, LocationStoreTests}`.
+`CycleStreets Ride PlannerTests/`: `Networking/{APIKeyTests, APIClientTests, GeocoderDecoderTests, JourneyPlanDecoderTests, MockAPIClient}`, `Features/{MapViewModelTests, ItineraryViewModelTests, SavedRoutesViewModelTests, MapStyleOptionTests}`, `Models/JourneyTests`, `Persistence/{RouteStoreTests, LocationStoreTests}`, `Location/{MockLocationService}`.
 
-**Known gaps** (pure-SwiftUI-wiring or genuinely hard-to-unit-test, treated as build-verify-only per project convention): `SavedLocationsViewModel`, `SettingsView`, `GPXExportButton`, `ItineraryView`, `SavedRoutesView`, `Endpoints`, `MapStyleSheet`, `MapStyleThumbnail`.
+**Known gaps** (pure-SwiftUI-wiring or genuinely hard-to-unit-test, treated as build-verify-only per project convention): `SavedLocationsViewModel`, `SettingsView`, `GPXExportButton`, `ItineraryView`, `SavedRoutesView`, `Endpoints`, `MapStyleSheet`, `MapStyleThumbnail`, `LocationService` (the real `CLLocationManager` wrapper — not exercisable via `xcodebuild test` on a simulator without a simulated GPX location).
 
 ## Known limitations / roadmap
 

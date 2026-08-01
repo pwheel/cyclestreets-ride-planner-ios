@@ -39,16 +39,19 @@ final class MapViewModel {
     var selectedPlan: RoutePlan
     var isLoading = false
     var errorMessage: String?
+    var isPresentingLocationPermissionAlert = false
     var searchDebounceMilliseconds: UInt64 = 300
 
     /// The active route among `routeOptions` — feeds `ItineraryView`, Save, and GPX export.
     var currentJourney: Journey? { routeOptions.first { $0.plan == selectedPlan }?.journey }
 
     private let apiClient: any APIClientProtocol
+    private let locationService: any LocationServiceProtocol
     private var searchDebounceTask: Task<Void, Never>?
 
-    init(apiClient: any APIClientProtocol, initialSelectedPlan: RoutePlan = .balanced) {
+    init(apiClient: any APIClientProtocol, locationService: any LocationServiceProtocol, initialSelectedPlan: RoutePlan = .balanced) {
         self.apiClient = apiClient
+        self.locationService = locationService
         self.selectedPlan = initialSelectedPlan
     }
 
@@ -144,6 +147,32 @@ final class MapViewModel {
         }
         if let from = fromPlace, let to = toPlace {
             await planRoute(from: from.clCoordinate, to: to.clCoordinate)
+        }
+    }
+
+    /// Fetches the device's current location and assigns it to the given
+    /// waypoint as a `Place` named literally "Current Location" — no
+    /// reverse geocoding. Reuses `selectPlace(_:as:)` so planning, markers,
+    /// and itinerary all behave exactly as they do for a searched place.
+    /// On permission denial/restriction, sets
+    /// `isPresentingLocationPermissionAlert` instead of `errorMessage` so
+    /// `MapView` can offer a direct link to Settings.
+    func useCurrentLocation(as role: WaypointRole) async {
+        isLoading = true
+        do {
+            let coordinate = try await locationService.currentLocation()
+            isLoading = false
+            let place = Place(
+                id: UUID().uuidString, name: "Current Location", near: nil,
+                coordinate: Coordinate(longitude: coordinate.longitude, latitude: coordinate.latitude)
+            )
+            await selectPlace(place, as: role)
+        } catch LocationServiceError.permissionDenied, LocationServiceError.restricted {
+            isLoading = false
+            isPresentingLocationPermissionAlert = true
+        } catch {
+            isLoading = false
+            errorMessage = "Couldn't get your current location. Please try again."
         }
     }
 }
