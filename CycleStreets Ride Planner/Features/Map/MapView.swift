@@ -419,16 +419,21 @@ struct MapView: View {
             Button {
                 useCurrentLocation()
             } label: {
+                // Padding and the minimum height live *inside* the label so the
+                // whole visually-padded row is part of the hit region (and clears
+                // the 44pt HIG minimum) — applied outside the `Button`, only the
+                // bare ~22pt `HStack` would have been tappable.
                 HStack {
                     Image(systemName: "location.fill")
                     Text("Current Location")
                     Spacer()
                 }
+                .padding(.vertical, 10)
+                .padding(.horizontal)
+                .frame(minHeight: 44)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .padding(.vertical, 10)
-            .padding(.horizontal)
 
             if !vm.searchResults.isEmpty {
                 Divider()
@@ -482,20 +487,26 @@ struct MapView: View {
     }
 
     private func useCurrentLocation() {
+        // The loading overlay is a bare `ProgressView` that doesn't block hit
+        // testing, so this row stays tappable during a fetch that can take
+        // seconds. A second trigger would strand the first one's continuation,
+        // so ignore repeat taps while one is already in flight.
+        guard !vm.isLoading else { return }
         searchText = ""
         vm.searchResults = []
         let role = selectingFor
-        if role == .from { selectingFor = .to }
         Task {
-            await vm.useCurrentLocation(as: role)
-            let resolvedPlace = role == .from ? vm.fromPlace : vm.toPlace
-            if let resolvedPlace {
-                withAnimation {
-                    updateCamera(to: MKCoordinateRegion(
-                        center: resolvedPlace.clCoordinate,
-                        span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-                    ))
-                }
+            // Unlike `selectPlace`, this can fail (permission denied, no fix).
+            // Advance the picker and recenter only once a place actually came
+            // back — flipping From→To up front would silently retarget the
+            // user's retry after they fix permissions in Settings.
+            guard let place = await vm.useCurrentLocation(as: role) else { return }
+            if role == .from { selectingFor = .to }
+            withAnimation {
+                updateCamera(to: MKCoordinateRegion(
+                    center: place.clCoordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                ))
             }
             if vm.fromPlace != nil && vm.toPlace != nil {
                 isSearchFieldFocused = false

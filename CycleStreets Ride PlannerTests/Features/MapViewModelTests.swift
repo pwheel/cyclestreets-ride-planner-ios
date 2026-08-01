@@ -133,7 +133,9 @@ final class MapViewModelTests {
 
     @Test func testUseCurrentLocationAsFromSetsPlaceNamedCurrentLocation() async {
         locationService.coordinateToReturn = CLLocationCoordinate2D(latitude: 51.5, longitude: -0.1)
-        await vm.useCurrentLocation(as: .from)
+        let returned = await vm.useCurrentLocation(as: .from)
+        #expect(returned?.name == "Current Location")
+        #expect(returned == vm.fromPlace)
         #expect(vm.fromPlace?.name == "Current Location")
         #expect(vm.fromPlace?.coordinate.latitude == 51.5)
         #expect(vm.fromPlace?.coordinate.longitude == -0.1)
@@ -141,6 +143,11 @@ final class MapViewModelTests {
         // must still end up false, not get stuck true waiting for a
         // planRoute that was never going to happen.
         #expect(!vm.isLoading)
+        // The "Current Location" Place must never leak into searchResults:
+        // the dropdown's bookmark affordance is driven off that array, and
+        // saving a coordinate under the name "Current Location" would go
+        // stale the moment the user moves.
+        #expect(vm.searchResults.isEmpty)
     }
 
     @Test func testUseCurrentLocationAsToAfterFromTriggersPlanRoute() async {
@@ -148,32 +155,56 @@ final class MapViewModelTests {
         client.journeyToReturn = journey
         let from = Place(id: "1", name: "Home", near: nil, coordinate: Coordinate(longitude: 0.1, latitude: 52.0))
         await vm.selectPlace(from, as: .from)
-        await vm.useCurrentLocation(as: .to)
+        let returned = await vm.useCurrentLocation(as: .to)
+        #expect(returned?.name == "Current Location")
+        #expect(returned == vm.toPlace)
         #expect(vm.toPlace?.name == "Current Location")
         #expect(vm.currentJourney?.number == journey.number)
+        #expect(vm.searchResults.isEmpty)
     }
 
     @Test func testUseCurrentLocationPermissionDeniedPresentsAlertAndDoesNotSetPlace() async {
         locationService.errorToThrow = LocationServiceError.permissionDenied
-        await vm.useCurrentLocation(as: .from)
+        let returned = await vm.useCurrentLocation(as: .from)
+        #expect(returned == nil)
         #expect(vm.isPresentingLocationPermissionAlert)
         #expect(vm.fromPlace == nil)
         #expect(vm.errorMessage == nil)
+        #expect(!vm.isLoading)
     }
 
     @Test func testUseCurrentLocationRestrictedPresentsAlert() async {
         locationService.errorToThrow = LocationServiceError.restricted
-        await vm.useCurrentLocation(as: .from)
+        let returned = await vm.useCurrentLocation(as: .from)
+        #expect(returned == nil)
         #expect(vm.isPresentingLocationPermissionAlert)
         #expect(vm.fromPlace == nil)
+        #expect(!vm.isLoading)
     }
 
     @Test func testUseCurrentLocationUnavailableSetsErrorMessage() async {
         locationService.errorToThrow = LocationServiceError.unavailable
-        await vm.useCurrentLocation(as: .from)
+        let returned = await vm.useCurrentLocation(as: .from)
+        #expect(returned == nil)
         #expect(vm.errorMessage != nil)
         #expect(!vm.isPresentingLocationPermissionAlert)
         #expect(vm.fromPlace == nil)
+        #expect(!vm.isLoading)
+    }
+
+    /// A duplicate trigger while a fetch is in flight is rejected by
+    /// `LocationService` rather than being allowed to strand the first call's
+    /// continuation. The ViewModel must swallow that rejection silently — no
+    /// error alert, and `isLoading` left alone because the still-running first
+    /// call owns it.
+    @Test func testUseCurrentLocationAlreadyInProgressIsSilentAndLeavesLoadingAlone() async {
+        locationService.errorToThrow = LocationServiceError.alreadyInProgress
+        let returned = await vm.useCurrentLocation(as: .from)
+        #expect(returned == nil)
+        #expect(vm.errorMessage == nil)
+        #expect(!vm.isPresentingLocationPermissionAlert)
+        #expect(vm.fromPlace == nil)
+        #expect(vm.isLoading)
     }
 
     @Test func testSearchTextChangedWithEmptyQueryClearsResultsImmediately() {

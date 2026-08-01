@@ -157,7 +157,13 @@ final class MapViewModel {
     /// On permission denial/restriction, sets
     /// `isPresentingLocationPermissionAlert` instead of `errorMessage` so
     /// `MapView` can offer a direct link to Settings.
-    func useCurrentLocation(as role: WaypointRole) async {
+    ///
+    /// Returns the resolved `Place`, or `nil` if the fetch failed for any
+    /// reason. Callers need this to distinguish success from failure without
+    /// re-reading `fromPlace`/`toPlace` after the `await` (which can't tell a
+    /// fresh assignment apart from a value that was already there).
+    @discardableResult
+    func useCurrentLocation(as role: WaypointRole) async -> Place? {
         isLoading = true
         do {
             let coordinate = try await locationService.currentLocation()
@@ -167,12 +173,20 @@ final class MapViewModel {
                 coordinate: Coordinate(longitude: coordinate.longitude, latitude: coordinate.latitude)
             )
             await selectPlace(place, as: role)
+            return place
+        } catch LocationServiceError.alreadyInProgress {
+            // An earlier call is still in flight and still owns `isLoading`;
+            // deliberately leave it set and stay silent rather than surfacing
+            // an error for what is just a duplicate trigger.
+            return nil
         } catch LocationServiceError.permissionDenied, LocationServiceError.restricted {
             isLoading = false
             isPresentingLocationPermissionAlert = true
+            return nil
         } catch {
             isLoading = false
             errorMessage = "Couldn't get your current location. Please try again."
+            return nil
         }
     }
 }
