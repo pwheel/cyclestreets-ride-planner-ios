@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		5BDC1C95301652C100D06D8C /* MapLibreSwiftDSL in Frameworks */ = {isa = PBXBuildFile; productRef = 5BDC1C94301652C100D06D8C /* MapLibreSwiftDSL */; };
+		5BDC1C97301652C100D06D8C /* MapLibreSwiftMacros in Frameworks */ = {isa = PBXBuildFile; productRef = 5BDC1C96301652C100D06D8C /* MapLibreSwiftMacros */; };
+		5BDC1C99301652C100D06D8C /* MapLibreSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = 5BDC1C98301652C100D06D8C /* MapLibreSwiftUI */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		5BCAB59C2FF461BE0070DF6C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +58,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5BDC1C99301652C100D06D8C /* MapLibreSwiftUI in Frameworks */,
+				5BDC1C95301652C100D06D8C /* MapLibreSwiftDSL in Frameworks */,
+				5BDC1C97301652C100D06D8C /* MapLibreSwiftMacros in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +121,9 @@
 			);
 			name = "CycleStreets Ride Planner";
 			packageProductDependencies = (
+				5BDC1C94301652C100D06D8C /* MapLibreSwiftDSL */,
+				5BDC1C96301652C100D06D8C /* MapLibreSwiftMacros */,
+				5BDC1C98301652C100D06D8C /* MapLibreSwiftUI */,
 			);
 			productName = "CycleStreets Ride Planner";
 			productReference = 5BCAB58E2FF461BD0070DF6C /* CycleStreets Ride Planner.app */;
@@ -195,6 +207,9 @@
 			);
 			mainGroup = 5BCAB5852FF461BD0070DF6C;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5BDC1C93301652C100D06D8C /* XCRemoteSwiftPackageReference "swiftui-dsl" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5BCAB58F2FF461BD0070DF6C /* Products */;
 			projectDirPath = "";
@@ -570,6 +585,35 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5BDC1C93301652C100D06D8C /* XCRemoteSwiftPackageReference "swiftui-dsl" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/maplibre/swiftui-dsl";
+			requirement = {
+				kind = exactVersion;
+				version = 0.25.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5BDC1C94301652C100D06D8C /* MapLibreSwiftDSL */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5BDC1C93301652C100D06D8C /* XCRemoteSwiftPackageReference "swiftui-dsl" */;
+			productName = MapLibreSwiftDSL;
+		};
+		5BDC1C96301652C100D06D8C /* MapLibreSwiftMacros */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5BDC1C93301652C100D06D8C /* XCRemoteSwiftPackageReference "swiftui-dsl" */;
+			productName = MapLibreSwiftMacros;
+		};
+		5BDC1C98301652C100D06D8C /* MapLibreSwiftUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5BDC1C93301652C100D06D8C /* XCRemoteSwiftPackageReference "swiftui-dsl" */;
+			productName = MapLibreSwiftUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 5BCAB5862FF461BD0070DF6C /* Project object */;
 }

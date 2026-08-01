@@ -13,4 +13,9 @@ struct APIKeyTests {
         #expect(!key.isEmpty)
     }
 
+    @Test func testThunderforestAPIKeyLoadsFromBundle() throws {
+        let key = try APIKey.loadThunderforestKey()
+        #expect(!key.isEmpty)
+    }
+
 }
