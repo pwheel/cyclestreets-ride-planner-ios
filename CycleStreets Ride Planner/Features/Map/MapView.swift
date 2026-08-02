@@ -217,10 +217,18 @@ struct MapView: View {
         .onAppear {
             // Passive auto-center: only fires once permission was already
             // granted in a previous session, so it never prompts at launch.
-            // `hasAutoCenteredOnLaunch` means switching tabs away and back
-            // won't re-snap the camera if the user has since panned away.
-            guard !hasAutoCenteredOnLaunch, vm.isLocationAuthorized else { return }
+            // `hasAutoCenteredOnLaunch` records that the Map screen's first
+            // appearance happened — independent of whether authorization was
+            // granted at that moment — not that auto-center itself happened.
+            // That's what makes switching tabs away and back not re-snap the
+            // camera: if we only set the flag inside the authorization guard,
+            // a `.notDetermined`-at-first-appearance session where the user
+            // later grants access via the recenter button would still have
+            // the flag unset, and the next tab-switch-back would incorrectly
+            // auto-center over wherever the user had since panned to.
+            guard !hasAutoCenteredOnLaunch else { return }
             hasAutoCenteredOnLaunch = true
+            guard vm.isLocationAuthorized else { return }
             startTrackingCurrentLocation()
         }
     }
