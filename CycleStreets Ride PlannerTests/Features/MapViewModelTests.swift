@@ -207,6 +207,58 @@ final class MapViewModelTests {
         #expect(vm.isLoading)
     }
 
+    @Test func testIsLocationAuthorizedReflectsLocationService() {
+        locationService.isAuthorized = false
+        #expect(!vm.isLocationAuthorized)
+        locationService.isAuthorized = true
+        #expect(vm.isLocationAuthorized)
+    }
+
+    @Test func testCenterOnCurrentLocationSucceedsWithoutTouchingWaypointsOrRoute() async {
+        locationService.coordinateToReturn = CLLocationCoordinate2D(latitude: 51.5, longitude: -0.1)
+        let succeeded = await vm.centerOnCurrentLocation()
+        #expect(succeeded)
+        #expect(vm.fromPlace == nil)
+        #expect(vm.toPlace == nil)
+        #expect(vm.routeOptions.isEmpty)
+        #expect(!vm.isLoading)
+    }
+
+    @Test func testCenterOnCurrentLocationPermissionDeniedPresentsAlert() async {
+        locationService.errorToThrow = LocationServiceError.permissionDenied
+        let succeeded = await vm.centerOnCurrentLocation()
+        #expect(!succeeded)
+        #expect(vm.isPresentingLocationPermissionAlert)
+        #expect(vm.errorMessage == nil)
+        #expect(!vm.isLoading)
+    }
+
+    @Test func testCenterOnCurrentLocationRestrictedPresentsAlert() async {
+        locationService.errorToThrow = LocationServiceError.restricted
+        let succeeded = await vm.centerOnCurrentLocation()
+        #expect(!succeeded)
+        #expect(vm.isPresentingLocationPermissionAlert)
+        #expect(!vm.isLoading)
+    }
+
+    @Test func testCenterOnCurrentLocationUnavailableSetsErrorMessage() async {
+        locationService.errorToThrow = LocationServiceError.unavailable
+        let succeeded = await vm.centerOnCurrentLocation()
+        #expect(!succeeded)
+        #expect(vm.errorMessage != nil)
+        #expect(!vm.isPresentingLocationPermissionAlert)
+        #expect(!vm.isLoading)
+    }
+
+    @Test func testCenterOnCurrentLocationAlreadyInProgressIsSilentAndLeavesLoadingAlone() async {
+        locationService.errorToThrow = LocationServiceError.alreadyInProgress
+        let succeeded = await vm.centerOnCurrentLocation()
+        #expect(!succeeded)
+        #expect(vm.errorMessage == nil)
+        #expect(!vm.isPresentingLocationPermissionAlert)
+        #expect(vm.isLoading)
+    }
+
     @Test func testSearchTextChangedWithEmptyQueryClearsResultsImmediately() {
         vm.searchResults = [
             Place(id: "1", name: "Cambridge", near: nil, coordinate: Coordinate(longitude: 0, latitude: 0))

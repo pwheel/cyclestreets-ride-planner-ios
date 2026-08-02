@@ -45,6 +45,11 @@ final class MapViewModel {
     /// The active route among `routeOptions` — feeds `ItineraryView`, Save, and GPX export.
     var currentJourney: Journey? { routeOptions.first { $0.plan == selectedPlan }?.journey }
 
+    /// Non-prompting read of whether location access is already granted —
+    /// used by `MapView` to gate passive map auto-centering so it never
+    /// triggers the system permission prompt at launch.
+    var isLocationAuthorized: Bool { locationService.isAuthorized }
+
     private let apiClient: any APIClientProtocol
     private let locationService: any LocationServiceProtocol
     private var searchDebounceTask: Task<Void, Never>?
@@ -187,6 +192,36 @@ final class MapViewModel {
             isLoading = false
             errorMessage = "Couldn't get your current location. Please try again."
             return nil
+        }
+    }
+
+    /// Fetches the device's current location purely to recenter the map
+    /// camera — unlike `useCurrentLocation(as:)`, this never touches
+    /// `fromPlace`/`toPlace` or triggers route planning. The caller doesn't
+    /// need the coordinate itself: on success it switches the map camera
+    /// into the frameworks' own follow-user-location tracking mode rather
+    /// than centering on a point held here. Same permission/error handling
+    /// as `useCurrentLocation`: `.permissionDenied`/`.restricted` sets
+    /// `isPresentingLocationPermissionAlert`; other failures set
+    /// `errorMessage`; `.alreadyInProgress` is swallowed silently, leaving
+    /// `isLoading` owned by the first call.
+    @discardableResult
+    func centerOnCurrentLocation() async -> Bool {
+        isLoading = true
+        do {
+            _ = try await locationService.currentLocation()
+            isLoading = false
+            return true
+        } catch LocationServiceError.alreadyInProgress {
+            return false
+        } catch LocationServiceError.permissionDenied, LocationServiceError.restricted {
+            isLoading = false
+            isPresentingLocationPermissionAlert = true
+            return false
+        } catch {
+            isLoading = false
+            errorMessage = "Couldn't get your current location. Please try again."
+            return false
         }
     }
 }
