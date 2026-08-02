@@ -78,6 +78,26 @@ Also fixed as part of this same change: when the row is hidden by either Finding
 
 ---
 
+## Finding 5: Typing in the `To` search field once showed "The data couldn't be read because it is missing"
+
+**Status:** 🔍 Monitoring — not reliably reproducible. Not fixed, and no fix has been guessed at; captured so it isn't lost if it recurs.
+
+**Severity:** Unknown — reported once, severity depends entirely on how often it actually happens, which isn't established yet.
+
+**Symptom (reported by user):** After selecting "Current Location" for the `From` field, typing in the `To` field produced an error alert: "The data couldn't be read because it is missing." On a later attempt, the user could not reproduce it.
+
+**Investigation:** Ruled out the one thing this exact message is best-known to indicate in this codebase — a placeholder/missing API key (`CLAUDE.md`'s documented new-worktree gotcha produces this identical generic-decode-error text). Both `Resources/APIKey_dev.txt` and `Resources/ThunderforestAPIKey_dev.txt` were confirmed to hold real values, not placeholders, at the time of investigation. Attempted to reproduce live via simulator UI automation (select Current Location for `From`, then type in `To`) on a freshly rebuilt/reinstalled app — no error occurred, though that specific attempt is inconclusive since the synthetic keystroke didn't actually land text in the field (the search field still showed its placeholder afterward), so it wasn't a valid test of the typing path either way.
+
+**Leading hypothesis (unconfirmed):** "The data couldn't be read because it is missing" is Foundation's generic `localizedDescription` for a `JSONDecoder` failure — i.e. `GeocoderDecoder` received a response that didn't match the expected shape. The most plausible trigger for a one-off, non-reproducible instance of this is a transient network hiccup (iOS Simulators are known to have a brief network-stack warm-up glitch immediately after boot) or a transient CycleStreets API blip, rather than a deterministic bug in this session's changes — nothing in the Current Location work touches `search(query:)`/`GeocoderDecoder`/the "To"-field code path differently from "From." Not confirmed; no code changes were made against this hypothesis, since guessing at a fix for an unreproducible symptom risks solving the wrong problem.
+
+**Separate, lower-priority observation surfaced by this investigation (not a fix for this finding):** whatever the root cause turns out to be, `MapViewModel.search(query:)`'s catch-all (`errorMessage = error.localizedDescription`) will surface *any* decode/network failure using Foundation's raw, often-unhelpful default message. Worth considering a friendlier, more actionable geocode-failure message generally — but that's a pre-existing quality gap unrelated to this feature, not something to fix under this finding.
+
+**Next step if it recurs:** capture the device log at the moment it happens (`xcrun simctl spawn <device> log show --predicate 'process == "CycleStreets Ride Planner"' --last 2m`) to see the actual underlying `URLError`/`DecodingError` rather than the generic UI string, which is the missing piece that would turn this from a hypothesis into a confirmed root cause.
+
+**Files:** none touched — no fix applied.
+
+---
+
 ## Summary Table
 
 | # | Finding | Type | Severity | Status |
@@ -86,5 +106,6 @@ Also fixed as part of this same change: when the row is hidden by either Finding
 | 2 | False "couldn't get location" on first grant; 5s authorization timeout races a real human response | Bug (regression from PR #15's own final-review fix) | High | ✅ Fixed |
 | 3 | "Current Location" still offered for the second waypoint after already used for the first | Usability | Low-Medium | ✅ Fixed |
 | 4 | "Current Location" stays visible in the dropdown once the user starts typing | Usability | Low-Medium | ✅ Fixed |
+| 5 | One-off "data couldn't be read" error typing in `To`; not reproducible on retry | Bug (unconfirmed — possibly transient network/simulator glitch) | Unknown | 🔍 Monitoring |
 
 Findings 1-2 were confirmed and fixed with genuine simulator UI automation (Accessibility + Screen Recording permissions granted mid-session), not code inspection alone — the exact capability gap tracked in GitHub #16, closed just enough for this session to verify its own fixes. Findings 3-4 are pure SwiftUI visibility-condition changes, build-verify-only per this project's test-coverage convention for view layout.
