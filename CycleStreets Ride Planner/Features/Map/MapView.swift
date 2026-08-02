@@ -117,7 +117,7 @@ struct MapView: View {
                 .task(id: selectedMapStyle) { updateOSMStyleCacheIfNeeded() }
             VStack(spacing: 0) {
                 searchBar
-                if isSearchFieldFocused { resultsList }
+                if isSearchFieldFocused && !resultsListIsEmpty { resultsList }
                 if !vm.routeOptions.isEmpty { legendRow.padding(.top, 8) }
             }
             .padding(.top, 8)
@@ -414,6 +414,32 @@ struct MapView: View {
         .padding(.horizontal)
     }
 
+    /// True when the *other* waypoint (not the one `selectingFor` is about
+    /// to fill) is already the synthesized "Current Location" place —
+    /// routing from/to the same point never makes sense, so the row is
+    /// hidden rather than left tappable into a no-op-looking result.
+    private var otherWaypointIsCurrentLocation: Bool {
+        let other = selectingFor == .from ? vm.toPlace : vm.fromPlace
+        return other?.isCurrentLocation ?? false
+    }
+
+    /// Gates the "Current Location" row: hidden once the user starts
+    /// typing (they're searching by name at that point, not picking a
+    /// preset — a future "Saved Locations" preset row should follow the
+    /// same `searchText.isEmpty` gating) or once the other waypoint is
+    /// already Current Location (see `otherWaypointIsCurrentLocation`).
+    private var isShowingCurrentLocationRow: Bool {
+        searchText.isEmpty && !otherWaypointIsCurrentLocation
+    }
+
+    /// True when `resultsList` has nothing to show — e.g. the other
+    /// waypoint is already Current Location and the user hasn't typed
+    /// anything yet — so the card can be omitted entirely rather than
+    /// rendering as an empty floating rounded box.
+    private var resultsListIsEmpty: Bool {
+        !isShowingCurrentLocationRow && vm.searchResults.isEmpty
+    }
+
     private var resultsList: some View {
         // No `.frame(maxHeight:)` on this VStack itself: inside this view's
         // ZStack (a sibling `.ignoresSafeArea` map offers effectively
@@ -426,27 +452,32 @@ struct MapView: View {
         // cap belongs on it alone, matching this view's pre-feature
         // behavior (the List always had its own `.frame(maxHeight:)`).
         VStack(alignment: .leading, spacing: 0) {
-            Button {
-                useCurrentLocation()
-            } label: {
-                // Padding and the minimum height live *inside* the label so the
-                // whole visually-padded row is part of the hit region (and clears
-                // the 44pt HIG minimum) — applied outside the `Button`, only the
-                // bare ~22pt `HStack` would have been tappable.
-                HStack {
-                    Image(systemName: "location.fill")
-                    Text("Current Location")
-                    Spacer()
+            if isShowingCurrentLocationRow {
+                Button {
+                    useCurrentLocation()
+                } label: {
+                    // Padding and the minimum height live *inside* the label so the
+                    // whole visually-padded row is part of the hit region (and clears
+                    // the 44pt HIG minimum) — applied outside the `Button`, only the
+                    // bare ~22pt `HStack` would have been tappable.
+                    HStack {
+                        Image(systemName: "location.fill")
+                        Text("Current Location")
+                        Spacer()
+                    }
+                    .padding(.vertical, 10)
+                    .padding(.horizontal)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
-                .padding(.vertical, 10)
-                .padding(.horizontal)
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+
+            if isShowingCurrentLocationRow && !vm.searchResults.isEmpty {
+                Divider()
+            }
 
             if !vm.searchResults.isEmpty {
-                Divider()
                 List(vm.searchResults) { place in
                     HStack {
                         Button {

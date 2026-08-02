@@ -169,7 +169,7 @@ final class MapViewModel {
             let coordinate = try await locationService.currentLocation()
             isLoading = false
             let place = Place(
-                id: UUID().uuidString, name: "Current Location", near: nil,
+                id: UUID().uuidString, name: Place.currentLocationName, near: nil,
                 coordinate: Coordinate(longitude: coordinate.longitude, latitude: coordinate.latitude)
             )
             await selectPlace(place, as: role)
