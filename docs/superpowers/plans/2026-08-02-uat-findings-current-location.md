@@ -10,41 +10,25 @@
 
 ## Finding 1: "Current Location" row renders oversized — takes up roughly half the screen
 
-**Status:** 🔍 Open — root cause not yet confirmed visually (no UI-automation tooling available to this agent either — see GitHub #16).
+**Status:** ✅ Fixed — commit `6899887`. Confirmed visually via simulator UI automation (accessibility + screen recording permissions granted mid-session — see below), not just inferred from code.
 
 **Severity:** Medium — the feature still works, but the dropdown looks broken/unpolished, which undermines trust in the row above it (the actual search results).
 
 **Symptom (reported by user):** Tapping into the search field and looking at the dropdown, the "Current Location" row is "super-big" — takes up roughly half the screen, rather than reading as a compact single row above the search results.
 
-**Root-cause hypothesis (from code, not yet visually confirmed):** `MapView.resultsList` (`CycleStreets Ride Planner/Features/Map/MapView.swift:417-468`) wraps the "Current Location" `Button` and the search-results `List` in a `VStack` with `.frame(maxHeight: 260)` applied to the *outer* `VStack`, not to the `List` itself:
+**Root cause (confirmed empirically via simulator UI automation, not just code reading):** `MapView.resultsList` wrapped the "Current Location" `Button` and the search-results `List` in a `VStack` with `.frame(maxHeight: 260)` applied to the *outer* `VStack`. The initial code-only hypothesis was that a greedy `List` was the culprit (a known SwiftUI pitfall: `List` expands to fill whatever space it's offered, regardless of row count) — but a screenshot taken with the search field focused and *zero* search results (so no `List` in the hierarchy at all — just the one `Button`) still showed the oversized card, disproving that as the sole cause. The actual behavior: inside this view's `ZStack` (a sibling `.ignoresSafeArea` map offers effectively unbounded height), a plain `VStack` with an outer `maxHeight` cap expanded to fill that cap even with a single small child. The `List`'s own greediness is a real secondary risk once results *do* appear, but the primary bug was the outer frame itself.
 
-```swift
-private var resultsList: some View {
-    VStack(alignment: .leading, spacing: 0) {
-        Button { useCurrentLocation() } label: { ... }        // ~44-64pt intrinsic height
-        if !vm.searchResults.isEmpty {
-            Divider()
-            List(vm.searchResults) { place in ... }            // no explicit height of its own
-        }
-    }
-    .frame(maxHeight: 260)   // <- applied here, not on the List
-    ...
-}
-```
+This exact risk was flagged as a Minor, deferred, not-visually-confirmed finding in this feature's own final code review (see PR #15's review notes) — this UAT finding is that risk materializing, and more severe than the reviewer's hypothesis anticipated.
 
-This is a known SwiftUI pitfall: a `List` (backed by `UITableView`) is greedy — without its own explicit height, it expands to fill whatever space its container offers, regardless of how many rows it actually holds. Before this feature, the `List` had its own `.frame(maxHeight: 220)` directly on it (see the pre-feature version of this file); the current version dropped that in favor of the outer `VStack`'s `maxHeight: 260`, which the `List` then greedily consumes — pulling the *entire card* (button + divider + mostly-empty list) up toward 260pt tall even with very few or zero results, which could read as "the Current Location row is huge" if the empty/near-empty list space below it isn't visually distinguished from the row itself.
+**Fix:** Removed `.frame(maxHeight: 260)` from the outer `VStack` entirely. Added `.frame(maxHeight: 200)` directly on the `List` instead (the only genuinely greedy element), matching this view's pre-feature behavior (the `List` always had its own explicit height cap). Verified visually: the row now renders as a compact ~64pt tall control, matching normal search-result-row sizing, in both the zero-results and populated-results states.
 
-This exact risk was flagged as a Minor, deferred, not-visually-confirmed finding in this feature's own final code review (see PR #15's review notes) — this UAT finding is that risk materializing.
-
-**Suggested fix:** Restore an explicit height constraint on the `List` itself (e.g. `.frame(maxHeight: 216)` on the `List`, matching roughly the old `220` minus the button+divider's own height, so the *total* card stays close to the previous ~260pt ceiling), rather than relying on the outer `VStack`'s `maxHeight` alone to constrain a greedy child. Needs to be re-checked visually once UI-automation tooling exists (GitHub #16) or via manual simulator confirmation.
-
-**Files likely touched:** `Features/Map/MapView.swift`.
+**Files touched:** `Features/Map/MapView.swift`.
 
 ---
 
 ## Finding 2: First-time permission grant shows "Couldn't get your current location. Please try again," but retrying works
 
-**Status:** 🔍 Open — root cause confirmed from code (high confidence), fix not yet applied.
+**Status:** ✅ Fixed — commit `6899887`. Confirmed via simulator UI automation: reset the app's location permission to not-determined, triggered the real system "Allow While Using App?" prompt, waited for a real (human, not scripted) response, and the flow completed successfully with no error — device log confirmed zero occurrences of the error string, no faults/crashes.
 
 **Severity:** High — this is the primary/first-run path for the entire feature. Every first-time user who grants permission hits a failure before the feature works, undermining trust regardless of the retry succeeding.
 
@@ -54,12 +38,9 @@ This exact risk was flagged as a Minor, deferred, not-visually-confirmed finding
 
 The retry succeeds because by the second tap, `manager.authorizationStatus` is no longer `.notDetermined` (it's `.authorizedWhenInUse`), so the `if status == .notDetermined` branch — and therefore the 5-second race — is skipped entirely, going straight to a real location fetch.
 
-**Suggested fix:** The 5-second ceiling is solving a real edge case (Location Services off device-wide, app status stuck `.notDetermined` forever) and shouldn't be removed outright, but 5 seconds is too aggressive for a human actually reading and responding to a system dialog. Options, roughly in order of preference:
-1. Lengthen the timeout substantially (e.g. 30-60s) — a real "Location Services off device-wide" hang is rare and the user isn't otherwise blocked (the full-screen spinner is already showing), so a longer ceiling costs little in the genuine edge case while giving a real human enough time to respond in the common case.
-2. Reset/restart the timeout whenever the app returns to the foreground (`UIApplication.didBecomeActiveNotification`) while the wait is pending, rather than using a single flat ceiling from the moment the prompt is requested — this would tolerate an arbitrarily slow human response as long as the app stays foregrounded, while still catching the "prompt never resolves at all" case (which manifests as the app never returning to a determined state even across foreground/background cycles).
-3. At minimum, add a regression test asserting the specific failure mode from this finding: authorization resolves to `.authorizedWhenInUse` *after* the timeout fires (simulating a slow-but-real user response) still succeeds — this needs a `MockLocationService`-level test or a `LocationService`-specific test if one becomes feasible; currently `LocationService` is build-verify-only per this feature's test-coverage convention, so this may require loosening that if the fix can't otherwise be regression-tested.
+**Fix:** Lengthened `authorizationTimeout` from 5 seconds to 60 seconds. The genuine edge case it guards against (Location Services off device-wide, app status stuck `.notDetermined` forever) is rare, and the full-screen spinner already showing means a long wait costs little in that rare case — so bias heavily toward tolerating a slow human over firing early. `LocationService` remains build-verify-only per this feature's established test-coverage convention (no `CLLocationManager` abstraction exists to unit-test the race itself); this fix was verified via simulator UI automation instead (see Status above) rather than an automated regression test.
 
-**Files likely touched:** `Location/LocationService.swift`.
+**Files touched:** `Location/LocationService.swift`.
 
 ---
 
@@ -67,5 +48,7 @@ The retry succeeds because by the second tap, `manager.authorizationStatus` is n
 
 | # | Finding | Type | Severity | Status |
 |---|---|---|---|---|
-| 1 | "Current Location" row renders oversized (greedy `List` sizing) | Bug (layout, unverified-at-review-time risk materializing) | Medium | 🔍 Open |
-| 2 | False "couldn't get location" on first grant; 5s authorization timeout races a real human response | Bug (regression from PR #15's own final-review fix) | High | 🔍 Open |
+| 1 | "Current Location" row renders oversized (outer VStack's own maxHeight, not just a greedy List) | Bug (layout, unverified-at-review-time risk materializing) | Medium | ✅ Fixed |
+| 2 | False "couldn't get location" on first grant; 5s authorization timeout races a real human response | Bug (regression from PR #15's own final-review fix) | High | ✅ Fixed |
+
+Both findings were confirmed and fixed with genuine simulator UI automation (Accessibility + Screen Recording permissions granted mid-session), not code inspection alone — the exact capability gap tracked in GitHub #16, closed just enough for this session to verify its own fixes.
