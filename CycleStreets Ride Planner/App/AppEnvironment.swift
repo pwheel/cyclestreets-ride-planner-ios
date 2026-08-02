@@ -24,3 +24,14 @@ extension EnvironmentValues {
         set { self[ThunderforestAPIKeyKey.self] = newValue }
     }
 }
+
+private struct LocationServiceKey: EnvironmentKey {
+    static let defaultValue: any LocationServiceProtocol = LocationService()
+}
+
+extension EnvironmentValues {
+    var locationService: any LocationServiceProtocol {
+        get { self[LocationServiceKey.self] }
+        set { self[LocationServiceKey.self] = newValue }
+    }
+}

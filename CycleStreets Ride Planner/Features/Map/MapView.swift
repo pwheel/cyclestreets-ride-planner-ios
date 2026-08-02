@@ -35,10 +35,10 @@ struct MapView: View {
     private static let waypointSymbolImage = UIImage(systemName: "mappin.circle.fill")!
         .withRenderingMode(.alwaysTemplate)
 
-    init(apiClient: any APIClientProtocol, pendingJourney: Binding<Journey?>, pendingPlaceSelection: Binding<PendingPlaceSelection?>) {
+    init(apiClient: any APIClientProtocol, locationService: any LocationServiceProtocol, pendingJourney: Binding<Journey?>, pendingPlaceSelection: Binding<PendingPlaceSelection?>) {
         let storedRawValue = UserDefaults.standard.string(forKey: "defaultRoutePlan") ?? RoutePlan.balanced.rawValue
         let initialPlan = RoutePlan(rawValue: storedRawValue) ?? .balanced
-        _vm = State(initialValue: MapViewModel(apiClient: apiClient, initialSelectedPlan: initialPlan))
+        _vm = State(initialValue: MapViewModel(apiClient: apiClient, locationService: locationService, initialSelectedPlan: initialPlan))
         _pendingJourney = pendingJourney
         _pendingPlaceSelection = pendingPlaceSelection
     }
@@ -117,7 +117,7 @@ struct MapView: View {
                 .task(id: selectedMapStyle) { updateOSMStyleCacheIfNeeded() }
             VStack(spacing: 0) {
                 searchBar
-                if !vm.searchResults.isEmpty { resultsList }
+                if isSearchFieldFocused && !resultsListIsEmpty { resultsList }
                 if !vm.routeOptions.isEmpty { legendRow.padding(.top, 8) }
             }
             .padding(.top, 8)
@@ -153,6 +153,19 @@ struct MapView: View {
         }
         .alert("Location Saved", isPresented: $isPresentingLocationSavedConfirmation) {
             Button("OK", role: .cancel) {}
+        }
+        .alert("Location Access Needed", isPresented: Binding(
+            get: { vm.isPresentingLocationPermissionAlert },
+            set: { vm.isPresentingLocationPermissionAlert = $0 }
+        )) {
+            Button("Cancel", role: .cancel) {}
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+        } message: {
+            Text("Location access is off. Enable it in Settings to use Current Location.")
         }
         .onChange(of: pendingJourney) { _, newValue in
             guard let journey = newValue else { return }
@@ -401,31 +414,101 @@ struct MapView: View {
         .padding(.horizontal)
     }
 
+    /// True when the *other* waypoint (not the one `selectingFor` is about
+    /// to fill) is already the synthesized "Current Location" place —
+    /// routing from/to the same point never makes sense, so the row is
+    /// hidden rather than left tappable into a no-op-looking result.
+    private var otherWaypointIsCurrentLocation: Bool {
+        let other = selectingFor == .from ? vm.toPlace : vm.fromPlace
+        return other?.isCurrentLocation ?? false
+    }
+
+    /// Gates the "Current Location" row: hidden once the user starts
+    /// typing (they're searching by name at that point, not picking a
+    /// preset — a future "Saved Locations" preset row should follow the
+    /// same `searchText.isEmpty` gating) or once the other waypoint is
+    /// already Current Location (see `otherWaypointIsCurrentLocation`).
+    private var isShowingCurrentLocationRow: Bool {
+        searchText.isEmpty && !otherWaypointIsCurrentLocation
+    }
+
+    /// True when `resultsList` has nothing to show — e.g. the other
+    /// waypoint is already Current Location and the user hasn't typed
+    /// anything yet — so the card can be omitted entirely rather than
+    /// rendering as an empty floating rounded box.
+    private var resultsListIsEmpty: Bool {
+        !isShowingCurrentLocationRow && vm.searchResults.isEmpty
+    }
+
     private var resultsList: some View {
-        List(vm.searchResults) { place in
-            HStack {
+        // No `.frame(maxHeight:)` on this VStack itself: inside this view's
+        // ZStack (a sibling `.ignoresSafeArea` map offers effectively
+        // unbounded height), a plain VStack with an outer maxHeight cap was
+        // observed filling that cap even with just the single "Current
+        // Location" button and no List at all — confirmed visually via
+        // simulator UI automation, not just inferred from code (UAT
+        // finding, see docs/superpowers/plans/2026-08-02-uat-findings-current-location.md).
+        // The only child that's actually greedy is the List below, so the
+        // cap belongs on it alone, matching this view's pre-feature
+        // behavior (the List always had its own `.frame(maxHeight:)`).
+        VStack(alignment: .leading, spacing: 0) {
+            if isShowingCurrentLocationRow {
                 Button {
-                    selectPlace(place)
+                    useCurrentLocation()
                 } label: {
-                    VStack(alignment: .leading) {
-                        Text(place.name).font(.body)
-                        if let near = place.near {
-                            Text(near).font(.caption).foregroundStyle(.secondary)
+                    // Padding and the minimum height live *inside* the label so the
+                    // whole visually-padded row is part of the hit region (and clears
+                    // the 44pt HIG minimum) — applied outside the `Button`, only the
+                    // bare ~22pt `HStack` would have been tappable.
+                    HStack {
+                        Image(systemName: "location.fill")
+                        Text("Current Location")
+                        Spacer()
+                    }
+                    .padding(.vertical, 10)
+                    .padding(.horizontal)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+
+            if isShowingCurrentLocationRow && !vm.searchResults.isEmpty {
+                Divider()
+            }
+
+            if !vm.searchResults.isEmpty {
+                List(vm.searchResults) { place in
+                    HStack {
+                        Button {
+                            selectPlace(place)
+                        } label: {
+                            VStack(alignment: .leading) {
+                                Text(place.name).font(.body)
+                                if let near = place.near {
+                                    Text(near).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
                         }
+                        Spacer()
+                        Button {
+                            savedLocationsVM.save(name: place.name, coordinate: place.coordinate)
+                            isPresentingLocationSavedConfirmation = true
+                        } label: {
+                            Image(systemName: "bookmark")
+                        }
+                        .buttonStyle(.borderless)
                     }
                 }
-                Spacer()
-                Button {
-                    savedLocationsVM.save(name: place.name, coordinate: place.coordinate)
-                    isPresentingLocationSavedConfirmation = true
-                } label: {
-                    Image(systemName: "bookmark")
-                }
-                .buttonStyle(.borderless)
+                .listStyle(.plain)
+                // `List` is inherently greedy — without its own height, it
+                // fills whatever space its container offers regardless of
+                // row count. Cap it directly here rather than on an
+                // ancestor (UAT finding, see
+                // docs/superpowers/plans/2026-08-02-uat-findings-current-location.md).
+                .frame(maxHeight: 200)
             }
         }
-        .listStyle(.plain)
-        .frame(maxHeight: 220)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal)
     }
@@ -443,6 +526,34 @@ struct MapView: View {
         }
         Task {
             await vm.selectPlace(place, as: role)
+            if vm.fromPlace != nil && vm.toPlace != nil {
+                isSearchFieldFocused = false
+            }
+        }
+    }
+
+    private func useCurrentLocation() {
+        // The loading overlay is a bare `ProgressView` that doesn't block hit
+        // testing, so this row stays tappable during a fetch that can take
+        // seconds. A second trigger would strand the first one's continuation,
+        // so ignore repeat taps while one is already in flight.
+        guard !vm.isLoading else { return }
+        searchText = ""
+        vm.searchResults = []
+        let role = selectingFor
+        Task {
+            // Unlike `selectPlace`, this can fail (permission denied, no fix).
+            // Advance the picker and recenter only once a place actually came
+            // back — flipping From→To up front would silently retarget the
+            // user's retry after they fix permissions in Settings.
+            guard let place = await vm.useCurrentLocation(as: role) else { return }
+            if role == .from { selectingFor = .to }
+            withAnimation {
+                updateCamera(to: MKCoordinateRegion(
+                    center: place.clCoordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                ))
+            }
             if vm.fromPlace != nil && vm.toPlace != nil {
                 isSearchFieldFocused = false
             }

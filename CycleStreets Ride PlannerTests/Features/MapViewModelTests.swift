@@ -33,11 +33,13 @@ private func waitUntil(
 @MainActor
 final class MapViewModelTests {
     let client: MockAPIClient
+    let locationService: MockLocationService
     let vm: MapViewModel
 
     init() {
         client = MockAPIClient()
-        vm = MapViewModel(apiClient: client)
+        locationService = MockLocationService()
+        vm = MapViewModel(apiClient: client, locationService: locationService)
     }
 
     @Test func testSearchUpdatesPlaces() async throws {
@@ -129,6 +131,82 @@ final class MapViewModelTests {
         #expect(vm.currentJourney?.number == journey.number)
     }
 
+    @Test func testUseCurrentLocationAsFromSetsPlaceNamedCurrentLocation() async {
+        locationService.coordinateToReturn = CLLocationCoordinate2D(latitude: 51.5, longitude: -0.1)
+        let returned = await vm.useCurrentLocation(as: .from)
+        #expect(returned?.name == "Current Location")
+        #expect(returned == vm.fromPlace)
+        #expect(vm.fromPlace?.name == "Current Location")
+        #expect(vm.fromPlace?.coordinate.latitude == 51.5)
+        #expect(vm.fromPlace?.coordinate.longitude == -0.1)
+        // Only .from is set (no .to yet), so planRoute never runs — isLoading
+        // must still end up false, not get stuck true waiting for a
+        // planRoute that was never going to happen.
+        #expect(!vm.isLoading)
+        // The "Current Location" Place must never leak into searchResults:
+        // the dropdown's bookmark affordance is driven off that array, and
+        // saving a coordinate under the name "Current Location" would go
+        // stale the moment the user moves.
+        #expect(vm.searchResults.isEmpty)
+    }
+
+    @Test func testUseCurrentLocationAsToAfterFromTriggersPlanRoute() async {
+        let journey = client.makeJourney()
+        client.journeyToReturn = journey
+        let from = Place(id: "1", name: "Home", near: nil, coordinate: Coordinate(longitude: 0.1, latitude: 52.0))
+        await vm.selectPlace(from, as: .from)
+        let returned = await vm.useCurrentLocation(as: .to)
+        #expect(returned?.name == "Current Location")
+        #expect(returned == vm.toPlace)
+        #expect(vm.toPlace?.name == "Current Location")
+        #expect(vm.currentJourney?.number == journey.number)
+        #expect(vm.searchResults.isEmpty)
+    }
+
+    @Test func testUseCurrentLocationPermissionDeniedPresentsAlertAndDoesNotSetPlace() async {
+        locationService.errorToThrow = LocationServiceError.permissionDenied
+        let returned = await vm.useCurrentLocation(as: .from)
+        #expect(returned == nil)
+        #expect(vm.isPresentingLocationPermissionAlert)
+        #expect(vm.fromPlace == nil)
+        #expect(vm.errorMessage == nil)
+        #expect(!vm.isLoading)
+    }
+
+    @Test func testUseCurrentLocationRestrictedPresentsAlert() async {
+        locationService.errorToThrow = LocationServiceError.restricted
+        let returned = await vm.useCurrentLocation(as: .from)
+        #expect(returned == nil)
+        #expect(vm.isPresentingLocationPermissionAlert)
+        #expect(vm.fromPlace == nil)
+        #expect(!vm.isLoading)
+    }
+
+    @Test func testUseCurrentLocationUnavailableSetsErrorMessage() async {
+        locationService.errorToThrow = LocationServiceError.unavailable
+        let returned = await vm.useCurrentLocation(as: .from)
+        #expect(returned == nil)
+        #expect(vm.errorMessage != nil)
+        #expect(!vm.isPresentingLocationPermissionAlert)
+        #expect(vm.fromPlace == nil)
+        #expect(!vm.isLoading)
+    }
+
+    /// A duplicate trigger while a fetch is in flight is rejected by
+    /// `LocationService` rather than being allowed to strand the first call's
+    /// continuation. The ViewModel must swallow that rejection silently — no
+    /// error alert, and `isLoading` left alone because the still-running first
+    /// call owns it.
+    @Test func testUseCurrentLocationAlreadyInProgressIsSilentAndLeavesLoadingAlone() async {
+        locationService.errorToThrow = LocationServiceError.alreadyInProgress
+        let returned = await vm.useCurrentLocation(as: .from)
+        #expect(returned == nil)
+        #expect(vm.errorMessage == nil)
+        #expect(!vm.isPresentingLocationPermissionAlert)
+        #expect(vm.fromPlace == nil)
+        #expect(vm.isLoading)
+    }
+
     @Test func testSearchTextChangedWithEmptyQueryClearsResultsImmediately() {
         vm.searchResults = [
             Place(id: "1", name: "Cambridge", near: nil, coordinate: Coordinate(longitude: 0, latitude: 0))
@@ -187,7 +265,7 @@ final class MapViewModelTests {
     }
 
     @Test func testInitSetsSelectedPlanFromInitialValue() {
-        let vm2 = MapViewModel(apiClient: client, initialSelectedPlan: .fastest)
+        let vm2 = MapViewModel(apiClient: client, locationService: locationService, initialSelectedPlan: .fastest)
         #expect(vm2.selectedPlan == .fastest)
     }
 
