@@ -44,11 +44,47 @@ The retry succeeds because by the second tap, `manager.authorizationStatus` is n
 
 ---
 
+## Finding 3: "Current Location" still offered for the second waypoint after already being used for the first
+
+**Status:** ✅ Fixed — commit `179320b`.
+
+**Severity:** Low-Medium — usability papercut, not a functional bug (nothing crashes or plans a nonsensical route unless the user actually taps it), but the reported effect — "makes it look to the user like nothing has happened" — undermines confidence in the whole feature right after its first successful use.
+
+**Symptom (reported by user):** After selecting "Current Location" for the `From` field, the dropdown for the `To` field still offers "Current Location". Selecting it there doesn't make sense (routing from your current location to your current location), and because the picker's flip from "From" to "To" after the first selection is visually subtle, a user tapping "Current Location" again can read the whole interaction as having done nothing.
+
+**Root cause:** `MapView.resultsList`'s "Current Location" row was shown unconditionally whenever the search field was focused, with no awareness of whether the *other* waypoint (`vm.fromPlace`/`vm.toPlace`, whichever `selectingFor` isn't currently pointing at) was already set to a Current Location place.
+
+**Fix:** Added `Place.currentLocationName` (a shared constant, replacing the duplicated `"Current Location"` string literal in `MapViewModel.useCurrentLocation`) and a computed `Place.isCurrentLocation`. `MapView` gained `otherWaypointIsCurrentLocation`, checking whichever waypoint `selectingFor` is *not* about to fill, and the row is now hidden whenever that's true (folded into the same `isShowingCurrentLocationRow` gate as Finding 4, since both conditions govern the same row).
+
+**Files touched:** `Models/Place.swift`, `Features/Map/MapViewModel.swift`, `Features/Map/MapView.swift`.
+
+---
+
+## Finding 4: "Current Location" stays in the dropdown after the user starts typing
+
+**Status:** ✅ Fixed — commit `179320b`.
+
+**Severity:** Low-Medium — same class of issue as Finding 3: not a functional bug, but a preset row sitting above live search results the user is actively typing past doesn't read as intentional.
+
+**Symptom (reported by user):** Once the user starts typing in the search field, "Current Location" remains visible in the dropdown even though the user is clearly searching by name at that point and isn't going to tap it.
+
+**Root cause:** Same as Finding 3 — the row's visibility was gated only on `isSearchFieldFocused`, with no consideration of `searchText`.
+
+**Fix:** Folded into the same `isShowingCurrentLocationRow` computed property as Finding 3: `searchText.isEmpty && !otherWaypointIsCurrentLocation`. Per the user's stated future direction — a "Saved Locations" preset row is planned to sit alongside "Current Location" in this same dropdown, and both should disappear the same way once typing starts — `isShowingCurrentLocationRow`'s doc comment flags this as the pattern any future preset row should follow, rather than building that abstraction now.
+
+Also fixed as part of this same change: when the row is hidden by either Finding 3 or 4's condition *and* there are no search results, `resultsList` previously would have rendered as an empty floating rounded-rect card (no button, no list, just the background/padding). Added `resultsListIsEmpty` so the whole card is omitted in that state instead.
+
+**Files touched:** `Features/Map/MapView.swift`.
+
+---
+
 ## Summary Table
 
 | # | Finding | Type | Severity | Status |
 |---|---|---|---|---|
 | 1 | "Current Location" row renders oversized (outer VStack's own maxHeight, not just a greedy List) | Bug (layout, unverified-at-review-time risk materializing) | Medium | ✅ Fixed |
 | 2 | False "couldn't get location" on first grant; 5s authorization timeout races a real human response | Bug (regression from PR #15's own final-review fix) | High | ✅ Fixed |
+| 3 | "Current Location" still offered for the second waypoint after already used for the first | Usability | Low-Medium | ✅ Fixed |
+| 4 | "Current Location" stays visible in the dropdown once the user starts typing | Usability | Low-Medium | ✅ Fixed |
 
-Both findings were confirmed and fixed with genuine simulator UI automation (Accessibility + Screen Recording permissions granted mid-session), not code inspection alone — the exact capability gap tracked in GitHub #16, closed just enough for this session to verify its own fixes.
+Findings 1-2 were confirmed and fixed with genuine simulator UI automation (Accessibility + Screen Recording permissions granted mid-session), not code inspection alone — the exact capability gap tracked in GitHub #16, closed just enough for this session to verify its own fixes. Findings 3-4 are pure SwiftUI visibility-condition changes, build-verify-only per this project's test-coverage convention for view layout.
