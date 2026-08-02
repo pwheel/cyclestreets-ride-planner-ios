@@ -45,7 +45,19 @@ final class LocationService: NSObject, LocationServiceProtocol, CLLocationManage
     /// would ever see is a `.notDetermined` one (which we deliberately
     /// ignore, since the system also emits those spuriously). Without this
     /// ceiling the continuation would never resume and the caller would hang.
-    private static let authorizationTimeout: Duration = .seconds(5)
+    ///
+    /// Deliberately generous (not a few seconds): this races the real
+    /// system "Allow While Using App?" dialog, which a human has to read
+    /// and decide on. A short ceiling here previously caused a false
+    /// "couldn't get your current location" error on the very first grant
+    /// of the entire feature, because the timeout routinely fired before a
+    /// real person finished responding to the prompt (UAT finding, see
+    /// docs/superpowers/plans/2026-08-02-uat-findings-current-location.md).
+    /// The genuine hang this guards against is rare, and the full-screen
+    /// spinner already showing means a long wait here costs little in that
+    /// rare case — so bias heavily toward tolerating a slow human over
+    /// firing early.
+    private static let authorizationTimeout: Duration = .seconds(60)
 
     private let manager = CLLocationManager()
     private var locationContinuation: CheckedContinuation<CLLocationCoordinate2D, Error>?

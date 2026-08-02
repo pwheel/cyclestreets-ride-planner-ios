@@ -415,6 +415,16 @@ struct MapView: View {
     }
 
     private var resultsList: some View {
+        // No `.frame(maxHeight:)` on this VStack itself: inside this view's
+        // ZStack (a sibling `.ignoresSafeArea` map offers effectively
+        // unbounded height), a plain VStack with an outer maxHeight cap was
+        // observed filling that cap even with just the single "Current
+        // Location" button and no List at all — confirmed visually via
+        // simulator UI automation, not just inferred from code (UAT
+        // finding, see docs/superpowers/plans/2026-08-02-uat-findings-current-location.md).
+        // The only child that's actually greedy is the List below, so the
+        // cap belongs on it alone, matching this view's pre-feature
+        // behavior (the List always had its own `.frame(maxHeight:)`).
         VStack(alignment: .leading, spacing: 0) {
             Button {
                 useCurrentLocation()
@@ -460,9 +470,14 @@ struct MapView: View {
                     }
                 }
                 .listStyle(.plain)
+                // `List` is inherently greedy — without its own height, it
+                // fills whatever space its container offers regardless of
+                // row count. Cap it directly here rather than on an
+                // ancestor (UAT finding, see
+                // docs/superpowers/plans/2026-08-02-uat-findings-current-location.md).
+                .frame(maxHeight: 200)
             }
         }
-        .frame(maxHeight: 260)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal)
     }
