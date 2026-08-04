@@ -203,19 +203,37 @@ existing gesture-sync handlers (`.onMapCameraChange` /
 exactly as they do today for any other manual pan. No new state or
 gesture-handling code is needed for this.
 
-**Switching map style while tracking**: not specially handled, and this is
-the one case where the dot *does* disappear — unlike a pan (same map view
-instance, dot persists per above), switching style via the layers sheet
-tears down and remounts an entirely new underlying map view (`Map` ↔
-`MapLibreSwiftUI.MapView`), which always starts with no dot until tracking
-is engaged on it again. The newly-mounted path's camera shows whatever
-`position`/`mapLibreCamera` last held — a static snapshot near (but not
-necessarily exactly) the live position. This matches how style switching
-already behaves outside of tracking (camera state is preserved best-effort
-across the two paths, not pixel-perfect), and avoids introducing an explicit
-"currently following" flag purely to special-case a fairly narrow scenario.
-The user can tap recenter again after switching to resume tracking (and the
-dot) on the new path.
+**Switching map style while tracking**: not specially handled, and whether
+the dot disappears depends on which style boundary is crossed —
+**confirmed on-device**, not just reasoned from the camera-binding code
+(an earlier draft of this design, before that confirmation, mis-predicted
+an Apple→OSM/OSM→Apple asymmetry based on which direction the shared
+`position`/`mapLibreCamera` bindings get overwritten; that turned out not
+to be what determines persistence — remounting is):
+
+- **Within the same rendering engine** (Apple↔Apple, or OSM↔OSM): the dot
+  *does* persist, unlike a cross-engine switch — the same `Map` or
+  `MapLibreSwiftUI.MapView` instance stays mounted (SwiftUI only updates
+  its style/content, doesn't recreate the view), so the underlying
+  `UIViewController`'s tracking state carries over untouched, same as a
+  pan (see above).
+- **Crossing between the two rendering engines** (Apple→OSM or OSM→Apple,
+  either direction): the dot *does* disappear. Switching style via the
+  layers sheet tears down and remounts an entirely new underlying map view
+  (`Map` ↔ `MapLibreSwiftUI.MapView`), which always starts with no dot
+  until tracking is engaged on it again — regardless of what the shared
+  `position`/`mapLibreCamera` bindings still hold, since a freshly
+  mounted view has no memory of the outgoing view's tracking state. The
+  newly-mounted path's camera instead shows whatever `position`/
+  `mapLibreCamera` last held as a static snapshot near (but not
+  necessarily exactly) the live position. This matches how style
+  switching already behaves outside of tracking (camera state is
+  preserved best-effort across the two paths, not pixel-perfect).
+
+Either way, this isn't specially handled — no explicit "currently
+following" flag is introduced purely to special-case a fairly narrow
+scenario. The user can tap recenter again after switching to resume
+tracking (and the dot) on the new path.
 
 ## Error handling
 
