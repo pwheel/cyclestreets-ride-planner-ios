@@ -17,6 +17,12 @@ protocol LocationServiceProtocol: Sendable {
     /// Throws `LocationServiceError.alreadyInProgress` if a previous call
     /// hasn't resolved yet — callers must not assume serialization.
     func currentLocation() async throws -> CLLocationCoordinate2D
+
+    /// Non-prompting read of whether location access is already granted
+    /// (`.authorizedWhenInUse` or `.authorizedAlways`). Never triggers the
+    /// system permission prompt — used to gate features that must not
+    /// surprise the user with a prompt outside an explicit user action.
+    var isAuthorized: Bool { get }
 }
 
 enum LocationServiceError: Error, Equatable {
@@ -68,6 +74,12 @@ final class LocationService: NSObject, LocationServiceProtocol, CLLocationManage
     override init() {
         super.init()
         manager.delegate = self
+    }
+
+    /// Non-prompting read of `CLLocationManager`'s current authorization
+    /// status — never triggers the system permission prompt.
+    var isAuthorized: Bool {
+        manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways
     }
 
     func currentLocation() async throws -> CLLocationCoordinate2D {

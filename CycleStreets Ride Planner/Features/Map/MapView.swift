@@ -22,6 +22,7 @@ struct MapView: View {
     @State private var position = MapCameraPosition.region(MapView.initialRegion)
     @State private var mapLibreCamera = MapView.mapViewCamera(for: MapView.initialRegion)
     @State private var isPresentingMapStyleSheet = false
+    @State private var hasAutoCenteredOnLaunch = false
     @AppStorage("mapStyle") private var mapStyleRawValue = MapStyleOption.defaultOption.rawValue
     @Environment(\.thunderforestAPIKey) private var thunderforestAPIKey
 
@@ -57,12 +58,28 @@ struct MapView: View {
         mapLibreCamera = MapView.mapViewCamera(for: region)
     }
 
+    /// Switches the camera into each framework's own follow-user-location
+    /// tracking mode — draws the live "blue dot" and pans the camera to it,
+    /// entirely internally (see the design doc for why this app doesn't
+    /// roll its own continuous location tracking). Both triggers (passive
+    /// auto-center and the recenter button) call this only once permission
+    /// is already known to be granted, so it never itself provokes the
+    /// system permission prompt.
+    private func startTrackingCurrentLocation() {
+        position = .userLocation(fallback: .region(MapView.initialRegion))
+        mapLibreCamera = .trackUserLocation(zoom: 15)
+    }
+
     /// Best-effort inverse of `mapViewCamera(for:)`, extracting an `MKCoordinateRegion` from
     /// whatever `CameraState` MapLibre's camera binding currently holds after a user gesture.
     /// Handles the two states this feature realistically produces (`.centered`, from gesture
     /// pans/pinches once the map has moved; `.rect`, our own programmatic bounding-box writes).
-    /// Any other state (user-location tracking, showcase) falls back to `nil`, leaving `position`
-    /// unchanged — this app never puts the OSM map into those states.
+    /// Any other state (`.trackingUserLocation`, while the recenter feature has following
+    /// active; `showcase`) falls back to `nil`, leaving `position` unchanged. That's fine for
+    /// `.trackingUserLocation`: it doesn't carry a coordinate for us to sync anyway — MapLibre
+    /// pans its own view internally as GPS fixes arrive without updating this binding's value —
+    /// and a real user gesture already exits tracking mode (flipping the binding to `.centered`)
+    /// before this is ever called with it.
     private static func region(for camera: MapViewCamera) -> MKCoordinateRegion? {
         switch camera.state {
         case let .centered(onCoordinate: coordinate, zoom: zoom, pitch: _, pitchRange: _, direction: _):
@@ -122,7 +139,7 @@ struct MapView: View {
             }
             .padding(.top, 8)
         }
-        .overlay(alignment: .bottomTrailing) { layersButton }
+        .overlay(alignment: .bottomTrailing) { mapControlButtons }
         .navigationTitle("Plan Route")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -197,6 +214,23 @@ struct MapView: View {
                 pendingPlaceSelection = nil
             }
         }
+        .onAppear {
+            // Passive auto-center: only fires once permission was already
+            // granted in a previous session, so it never prompts at launch.
+            // `hasAutoCenteredOnLaunch` records that the Map screen's first
+            // appearance happened — independent of whether authorization was
+            // granted at that moment — not that auto-center itself happened.
+            // That's what makes switching tabs away and back not re-snap the
+            // camera: if we only set the flag inside the authorization guard,
+            // a `.notDetermined`-at-first-appearance session where the user
+            // later grants access via the recenter button would still have
+            // the flag unset, and the next tab-switch-back would incorrectly
+            // auto-center over wherever the user had since panned to.
+            guard !hasAutoCenteredOnLaunch else { return }
+            hasAutoCenteredOnLaunch = true
+            guard vm.isLocationAuthorized else { return }
+            startTrackingCurrentLocation()
+        }
     }
 
     @ViewBuilder
@@ -216,6 +250,7 @@ struct MapView: View {
 
     private func appleMap(style: MapStyle) -> some View {
         Map(position: $position) {
+            UserAnnotation()
             ForEach(nonSelectedRouteOptions) { option in
                 if let journey = option.journey {
                     MapPolyline(coordinates: journey.allCoordinates)
@@ -370,6 +405,26 @@ struct MapView: View {
         .padding(.horizontal)
     }
 
+    private var mapControlButtons: some View {
+        VStack(spacing: 12) {
+            recenterButton
+            layersButton
+        }
+        .padding()
+    }
+
+    private var recenterButton: some View {
+        Button {
+            recenterOnCurrentLocation()
+        } label: {
+            Image(systemName: "location.fill")
+                .font(.title2)
+                .padding(12)
+                .background(.regularMaterial, in: Circle())
+        }
+        .accessibilityLabel("Recenter on current location")
+    }
+
     private var layersButton: some View {
         Button {
             isPresentingMapStyleSheet = true
@@ -380,9 +435,21 @@ struct MapView: View {
                 .background(.regularMaterial, in: Circle())
         }
         .accessibilityLabel("Map style")
-        .padding()
         .sheet(isPresented: $isPresentingMapStyleSheet) {
             MapStyleSheet(selection: mapStyleBinding, thunderforestAPIKey: thunderforestAPIKey)
+        }
+    }
+
+    /// Fetches the current location via `MapViewModel` first (so a
+    /// permission failure surfaces through the existing "Location Access
+    /// Needed" / generic error alerts) and only then switches the camera
+    /// into tracking mode — never lets the map frameworks request their own
+    /// authorization silently with no app-level fallback UI on denial.
+    private func recenterOnCurrentLocation() {
+        guard !vm.isLoading else { return }
+        Task {
+            guard await vm.centerOnCurrentLocation() else { return }
+            startTrackingCurrentLocation()
         }
     }
 
