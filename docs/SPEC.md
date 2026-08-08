@@ -84,7 +84,7 @@ Reuse this pattern for any future "select something in tab A, act on it in tab B
 
 ## Models
 
-`RoutePlan` (`balanced`/`quietest`/`fastest`), `Coordinate`, `Segment`, `Journey` (`allCoordinates` flattens all segment points), `Place` (`displayName` combines `name`+`near`), `SavedRoute` (`id`, `journeyID`, `name` (var), `plan`, `distanceMetres`, `timeSeconds`, `savedAt`; `Journey.asSavedRoute(name:)` builds one), `SavedLocation` (`id`, `name` (var), `coordinate`).
+`RoutePlan` (`balanced`/`quietest`/`fastest`), `Coordinate`, `Segment`, `Journey` (`allCoordinates` flattens all segment points), `Place` (`displayName` combines `name`+`near`; `init(mapItem:)` builds one from a resolved MapKit search result — see "Search" below), `SavedRoute` (`id`, `journeyID`, `name` (var), `plan`, `distanceMetres`, `timeSeconds`, `savedAt`; `Journey.asSavedRoute(name:)` builds one), `SavedLocation` (`id`, `name` (var), `coordinate`).
 
 ## Persistence
 
@@ -98,7 +98,7 @@ Thunderforest tile-provider key follows the identical pattern: `Resources/Thunde
 
 ## Test coverage
 
-`CycleStreets Ride PlannerTests/`: `Networking/{APIKeyTests, APIClientTests, GeocoderDecoderTests, JourneyPlanDecoderTests, MockAPIClient}`, `Features/{MapViewModelTests, ItineraryViewModelTests, SavedRoutesViewModelTests, MapStyleOptionTests}`, `Models/JourneyTests`, `Persistence/{RouteStoreTests, LocationStoreTests}`, `Location/{MockLocationService}`.
+`CycleStreets Ride PlannerTests/`: `Networking/{APIKeyTests, APIClientTests, GeocoderDecoderTests, JourneyPlanDecoderTests, MockAPIClient}`, `Features/{MapViewModelTests, ItineraryViewModelTests, SavedRoutesViewModelTests, MapStyleOptionTests}`, `Models/{JourneyTests, PlaceTests}`, `Persistence/{RouteStoreTests, LocationStoreTests}`, `Location/{MockLocationService}`.
 
 **Known gaps** (pure-SwiftUI-wiring or genuinely hard-to-unit-test, treated as build-verify-only per project convention): `SavedLocationsViewModel`, `SettingsView`, `GPXExportButton`, `ItineraryView`, `SavedRoutesView`, `Endpoints`, `MapStyleSheet`, `MapStyleThumbnail`, `LocationService` (the real `CLLocationManager` wrapper — not exercisable via `xcodebuild test` on a simulator without a simulated GPX location).
 
