@@ -72,6 +72,33 @@ Reuse this pattern for any future "select something in tab A, act on it in tab B
 - **Bounded authorization wait.** `locationManagerDidChangeAuthorization` deliberately ignores `.notDetermined` callbacks (the system emits them spuriously). Because there is a real state where `.notDetermined` is the *only* callback that will ever arrive — Location Services off device-wide with the app's own status still undetermined — the wait is raced against a 5s timeout task that resumes with `.notDetermined`, which `currentLocation()` maps to `.unavailable`. Keep both the guard and the ceiling.
 - **Error mapping.** `.permissionDenied`/`.restricted` are the "link the user to Settings" cases (including `CLError.denied` from `didFailWithError`, which means Location Services are off system-wide despite an authorized app status). `.notDetermined` and `@unknown default` both map to `.unavailable` — a generic "try again", never a Settings link on a guess.
 
+## Search (`Search/LocationSearchProviding.swift`)
+
+Live typeahead for the Map screen's From/To search, backed by Apple MapKit
+rather than CycleStreets' own geocoder (GitHub #19 — see
+`docs/superpowers/specs/2026-08-08-improve-typeahead-design.md` for why this
+is a straight replacement, not a flag-based dual-provider system).
+
+`LocationSearchProviding` is `@MainActor`, mirroring `LocationServiceProtocol`:
+`suggestionsUpdates: AsyncStream<[SearchSuggestion]>` (a never-completing
+stream of live suggestion batches), `updateQuery(_:)` (forward every
+keystroke — no debounce), `updateRegion(_:)` (bias subsequent suggestions;
+`nil` is a no-op, not a "clear bias"), and `resolve(_:) async throws -> Place`
+(turns one suggestion into a coordinate — only called for a suggestion the
+user has actually acted on, never for a whole results batch, since resolving
+is a billed/rate-limited `MKLocalSearch` call while the live completer itself
+is free and unlimited). `SearchSuggestion` (`id`, `title`, `subtitle`) holds
+no coordinate — `MKLocalSearchCompletion` has no public initializer, so it
+can't be stored on or reconstructed from a plain model usable in tests.
+
+`MapKitLocationSearchProvider` is the real implementation: wraps
+`MKLocalSearchCompleter`'s delegate callbacks into `suggestionsUpdates`,
+keeping a private `[id: MKLocalSearchCompletion]` map (replaced wholesale on
+every update) so `resolve(_:)` can look a suggestion back up and run a single
+`MKLocalSearch` call → `Place(mapItem:)`. `EnvironmentValues.locationSearchProvider`
+follows the identical DI pattern as `.apiClient`/`.locationService`
+(`App/AppEnvironment.swift`), defaulting to a fresh `MapKitLocationSearchProvider()`.
+
 ## Networking — CycleStreets API contract (as verified live, not as originally planned)
 
 `Networking/Endpoints.swift` builds URLs; `Networking/APIClient.swift` fetches + delegates decoding; `APIClientProtocol`: `planJourney(from:to:plan:)`, `geocode(query:)`, `downloadGPX(journeyID:plan:)`, `reloadJourney(itineraryID:plan:)`.
@@ -100,7 +127,7 @@ Thunderforest tile-provider key follows the identical pattern: `Resources/Thunde
 
 `CycleStreets Ride PlannerTests/`: `Networking/{APIKeyTests, APIClientTests, GeocoderDecoderTests, JourneyPlanDecoderTests, MockAPIClient}`, `Features/{MapViewModelTests, ItineraryViewModelTests, SavedRoutesViewModelTests, MapStyleOptionTests}`, `Models/{JourneyTests, PlaceTests}`, `Persistence/{RouteStoreTests, LocationStoreTests}`, `Location/{MockLocationService}`.
 
-**Known gaps** (pure-SwiftUI-wiring or genuinely hard-to-unit-test, treated as build-verify-only per project convention): `SavedLocationsViewModel`, `SettingsView`, `GPXExportButton`, `ItineraryView`, `SavedRoutesView`, `Endpoints`, `MapStyleSheet`, `MapStyleThumbnail`, `LocationService` (the real `CLLocationManager` wrapper — not exercisable via `xcodebuild test` on a simulator without a simulated GPX location).
+**Known gaps** (pure-SwiftUI-wiring or genuinely hard-to-unit-test, treated as build-verify-only per project convention): `SavedLocationsViewModel`, `SettingsView`, `GPXExportButton`, `ItineraryView`, `SavedRoutesView`, `Endpoints`, `MapStyleSheet`, `MapStyleThumbnail`, `LocationService` (the real `CLLocationManager` wrapper — not exercisable via `xcodebuild test` on a simulator without a simulated GPX location), `MapKitLocationSearchProvider` (same reasoning — a delegate-based wrapper around concrete `MKLocalSearchCompleter`/`MKLocalSearch` types with no public initializers usable in tests).
 
 ## Known limitations / roadmap
 
