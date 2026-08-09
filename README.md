@@ -1,4 +1,4 @@
-# CycleStreets Ride Planner
+# Wheel Routes Ride Planner
 
 An iOS app for planning cycle routes using the [CycleStreets](https://www.cyclestreets.net/) API — search for a start and end point, get a quiet/balanced/fastest cycle route, view turn-by-turn directions, export to GPX, and save routes and locations for later.
 
@@ -20,17 +20,17 @@ No user account is required — the app works entirely off a single API key.
 
 ## Setup
 
-1. Clone the repo and open `CycleStreets Ride Planner.xcodeproj` in Xcode.
-2. Add your API key to `CycleStreets Ride Planner/Resources/APIKey_dev.txt` (used for local/debug builds). This file is tracked as a placeholder in git; keep your real key out of commits with:
+1. Clone the repo and open `Wheel Routes Ride Planner.xcodeproj` in Xcode.
+2. Add your API key to `Wheel Routes Ride Planner/Resources/APIKey_dev.txt` (used for local/debug builds). This file is tracked as a placeholder in git; keep your real key out of commits with:
    ```
-   git update-index --skip-worktree "CycleStreets Ride Planner/Resources/APIKey_dev.txt"
+   git update-index --skip-worktree "Wheel Routes Ride Planner/Resources/APIKey_dev.txt"
    ```
 3. Build and run.
 
 ## Testing
 
 ```
-xcodebuild test -project "CycleStreets Ride Planner.xcodeproj" -scheme "CycleStreets Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17"
+xcodebuild test -project "Wheel Routes Ride Planner.xcodeproj" -scheme "Wheel Routes Ride Planner" -destination "platform=iOS Simulator,name=iPhone 17"
 ```
 
 Tests use [Swift Testing](https://developer.apple.com/documentation/testing), not XCTest.
