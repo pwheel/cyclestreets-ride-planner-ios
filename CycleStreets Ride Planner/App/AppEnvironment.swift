@@ -37,7 +37,7 @@ extension EnvironmentValues {
 }
 
 private struct LocationSearchProviderKey: EnvironmentKey {
-    static let defaultValue: any LocationSearchProviding = MapKitLocationSearchProvider()
+    static let defaultValue: any LocationSearchProviding = PhotonLocationSearchProvider()
 }
 
 extension EnvironmentValues {

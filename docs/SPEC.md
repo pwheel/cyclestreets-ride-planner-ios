@@ -74,30 +74,31 @@ Reuse this pattern for any future "select something in tab A, act on it in tab B
 
 ## Search (`Search/LocationSearchProviding.swift`)
 
-Live typeahead for the Map screen's From/To search, backed by Apple MapKit
+Live typeahead for the Map screen's From/To search, backed by
+[Photon](https://photon.komoot.io) — a public, OSM-data-backed geocoder —
 rather than CycleStreets' own geocoder (GitHub #19 — see
-`docs/superpowers/specs/2026-08-08-improve-typeahead-design.md` for why this
-is a straight replacement, not a flag-based dual-provider system).
+`docs/superpowers/specs/2026-08-08-improve-typeahead-design.md`: originally
+scoped around Apple MapKit, revised once it became clear Apple's MapKit
+terms restrict search-result usage to Apple's own map, conflicting with
+this app's existing OSM-tile rendering).
 
-`LocationSearchProviding` is `@MainActor`, mirroring `LocationServiceProtocol`:
-`suggestionsUpdates: AsyncStream<[SearchSuggestion]>` (a never-completing
-stream of live suggestion batches), `updateQuery(_:)` (forward every
-keystroke — no debounce), `updateRegion(_:)` (bias subsequent suggestions;
-`nil` is a no-op, not a "clear bias"), and `resolve(_:) async throws -> Place`
-(turns one suggestion into a coordinate — only called for a suggestion the
-user has actually acted on, never for a whole results batch, since resolving
-is a billed/rate-limited `MKLocalSearch` call while the live completer itself
-is free and unlimited). `SearchSuggestion` (`id`, `title`, `subtitle`) holds
-no coordinate — `MKLocalSearchCompletion` has no public initializer, so it
-can't be stored on or reconstructed from a plain model usable in tests.
+`LocationSearchProviding` has a single member: `search(query:near:) async throws -> [Place]`.
+Unlike `LocationServiceProtocol`, it isn't `@MainActor`-isolated — it's a
+stateless, plain async HTTP call, matching `APIClientProtocol`'s own style.
+The `near` parameter, when non-nil, biases (doesn't filter) results toward
+that coordinate.
 
-`MapKitLocationSearchProvider` is the real implementation: wraps
-`MKLocalSearchCompleter`'s delegate callbacks into `suggestionsUpdates`,
-keeping a private `[id: MKLocalSearchCompletion]` map (replaced wholesale on
-every update) so `resolve(_:)` can look a suggestion back up and run a single
-`MKLocalSearch` call → `Place(mapItem:)`. `EnvironmentValues.locationSearchProvider`
+`PhotonLocationSearchProvider` is the real implementation:
+`PhotonEndpoint.search(query:near:)` builds the request URL
+(`GET https://photon.komoot.io/api/` with `q`, `limit=6`, and `lat`/`lon`
+when biasing), `PhotonGeocoderDecoder.decode(_:)` parses the GeoJSON
+`FeatureCollection` response into `[Place]` (`name` falls back to `street`
+then a literal "Unknown location"; `near` is assembled from
+`city`/`district`/`county`/`state`/`country`, skipping whichever Photon
+omits for a given result). `EnvironmentValues.locationSearchProvider`
 follows the identical DI pattern as `.apiClient`/`.locationService`
-(`App/AppEnvironment.swift`), defaulting to a fresh `MapKitLocationSearchProvider()`.
+(`App/AppEnvironment.swift`), defaulting to a fresh
+`PhotonLocationSearchProvider()`.
 
 ## Networking — CycleStreets API contract (as verified live, not as originally planned)
 
@@ -111,7 +112,7 @@ follows the identical DI pattern as `.apiClient`/`.locationService`
 
 ## Models
 
-`RoutePlan` (`balanced`/`quietest`/`fastest`), `Coordinate`, `Segment`, `Journey` (`allCoordinates` flattens all segment points), `Place` (`displayName` combines `name`+`near`; `init(mapItem:)` builds one from a resolved MapKit search result — see "Search" below), `SavedRoute` (`id`, `journeyID`, `name` (var), `plan`, `distanceMetres`, `timeSeconds`, `savedAt`; `Journey.asSavedRoute(name:)` builds one), `SavedLocation` (`id`, `name` (var), `coordinate`).
+`RoutePlan` (`balanced`/`quietest`/`fastest`), `Coordinate`, `Segment`, `Journey` (`allCoordinates` flattens all segment points), `Place` (`displayName` combines `name`+`near`), `SavedRoute` (`id`, `journeyID`, `name` (var), `plan`, `distanceMetres`, `timeSeconds`, `savedAt`; `Journey.asSavedRoute(name:)` builds one), `SavedLocation` (`id`, `name` (var), `coordinate`).
 
 ## Persistence
 
@@ -125,9 +126,9 @@ Thunderforest tile-provider key follows the identical pattern: `Resources/Thunde
 
 ## Test coverage
 
-`CycleStreets Ride PlannerTests/`: `Networking/{APIKeyTests, APIClientTests, GeocoderDecoderTests, JourneyPlanDecoderTests, MockAPIClient}`, `Features/{MapViewModelTests, ItineraryViewModelTests, SavedRoutesViewModelTests, MapStyleOptionTests}`, `Models/{JourneyTests, PlaceTests}`, `Persistence/{RouteStoreTests, LocationStoreTests}`, `Location/{MockLocationService}`.
+`CycleStreets Ride PlannerTests/`: `Networking/{APIKeyTests, APIClientTests, GeocoderDecoderTests, JourneyPlanDecoderTests, MockAPIClient}`, `Features/{MapViewModelTests, ItineraryViewModelTests, SavedRoutesViewModelTests, MapStyleOptionTests}`, `Models/{JourneyTests}`, `Persistence/{RouteStoreTests, LocationStoreTests}`, `Location/{MockLocationService}`, `Search/{PhotonEndpointTests, PhotonGeocoderDecoderTests}`.
 
-**Known gaps** (pure-SwiftUI-wiring or genuinely hard-to-unit-test, treated as build-verify-only per project convention): `SavedLocationsViewModel`, `SettingsView`, `GPXExportButton`, `ItineraryView`, `SavedRoutesView`, `Endpoints`, `MapStyleSheet`, `MapStyleThumbnail`, `LocationService` (the real `CLLocationManager` wrapper — not exercisable via `xcodebuild test` on a simulator without a simulated GPX location), `MapKitLocationSearchProvider` (same reasoning — a delegate-based wrapper around concrete `MKLocalSearchCompleter`/`MKLocalSearch` types with no public initializers usable in tests).
+**Known gaps** (pure-SwiftUI-wiring or genuinely hard-to-unit-test, treated as build-verify-only per project convention): `SavedLocationsViewModel`, `SettingsView`, `GPXExportButton`, `ItineraryView`, `SavedRoutesView`, `Endpoints`, `MapStyleSheet`, `MapStyleThumbnail`, `LocationService` (the real `CLLocationManager` wrapper — not exercisable via `xcodebuild test` on a simulator without a simulated GPX location).
 
 ## Known limitations / roadmap
 
