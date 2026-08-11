@@ -1,318 +1,355 @@
-# Design: Replace CycleStreets typeahead/geocoder with Apple MapKit
+# Design: Replace CycleStreets typeahead/geocoder with Photon (OSM)
 
-> Addresses GitHub issue #19 — "Replace CycleStreets typeahead/geocoder with
-> Apple MapKit for search." SPEC.md's "Known limitations" section currently
-> lists "switchable geocoder provider (CycleStreets vs MapKit, flag-based)"
-> as a roadmap item from `docs/superpowers/plans/2026-07-19-roadmap-multi-route-comparison.md`;
-> this supersedes that framing — the outcome is a straight replacement, not a
-> flag-based dual-provider system (see "Why straight replacement" below).
+> Addresses GitHub issue #19 — "Replace CycleStreets typeahead/geocoder ...
+> for search." Originally scoped around Apple MapKit (`MKLocalSearchCompleter`/
+> `MKLocalSearch`); **revised mid-implementation** (after two tasks of the
+> MapKit-based plan had already landed) once it became clear Apple's MapKit
+> terms restrict search-result usage to Apple's own map, which conflicts with
+> this app's existing OSM-tile rendering path (`docs/superpowers/specs/2026-07-26-map-tile-providers-design.md`).
+> The provider is now [Photon](https://photon.komoot.io) — a public,
+> OSM-data-backed geocoder — via its free demo API. Everything below
+> supersedes the MapKit-specific sections of the original version of this
+> document; the non-provider-specific decisions (straight replacement, no
+> flag) still stand.
 
 ## Summary
 
 The Map screen's From/To search (`MapViewModel.searchTextChanged`/`search`,
 backed today by `Endpoints.geocode` against CycleStreets' v2 geocoder) is
-replaced outright by Apple MapKit's `MKLocalSearchCompleter` +
-`MKLocalSearch`. This is safe because CycleStreets' journey-planning
-endpoints (`Endpoints.journeyPlan`/`journeyReload`) only ever consume raw
-`lon,lat` — the geocoder has no other coupling to routing, so swapping its
-provider is isolated to the search flow.
+replaced outright by [Photon](https://photon.komoot.io)'s public demo API
+(`GET https://photon.komoot.io/api/`). Safe for the same reason as the
+original design: CycleStreets' journey-planning endpoints only ever consume
+raw `lon,lat`, so the geocoder has no other coupling to routing.
 
-Three decisions, made with the user before this design:
+Decisions carried over from the original design:
 
 1. **Straight replacement**, not a flag-based dual-provider system. The
    CycleStreets geocoder path (`Endpoints.geocode`, `GeocoderDecoder`,
    `APIClientProtocol.geocode`) is deleted, not kept behind a toggle.
-2. **True live typeahead**, not a swapped-in single request/response call.
-   `MKLocalSearchCompleter`'s delegate stream drives `searchResults`
-   directly as the user types — no manual debounce.
-3. **Location-biased results** when the device's location is already
+2. **Location-biased results** when the device's location is already
    authorized (non-prompting check) — unbiased otherwise. Opening search
    never itself triggers the location permission prompt.
 
-## Why straight replacement, not a flag
+Decisions that changed with the Photon pivot:
 
-The roadmap doc that originally raised this (linked above) flagged real
-open questions about a dual-provider approach: where geocoding
-conceptually lives, where a toggle would live, and — most concretely — that
-two live search implementations means `MapViewModelTests` needs coverage
-for both, doubling the test/maintenance surface for a benefit ("CycleStreets
-might still win for some UK-specific queries") that's speculative rather
-than observed. The issue's own suggested next step (a throwaway
-CycleStreets-vs-MapKit comparison) was about *deciding* this, not something
-this design routes around — the user made the call directly: MapKit
-replaces CycleStreets outright.
+3. **A single debounced request/response call, not a live stream.** Unlike
+   `MKLocalSearchCompleter` (free, no rate limit, designed for live typing),
+   Photon's public demo instance's policy is "reasonable use only —
+   extensive usage will be throttled or completely banned," with no
+   documented request budget. The original design's justification for
+   dropping the debounce doesn't hold for a shared community-run API — the
+   debounce comes back.
+4. **No two-phase suggestion/resolve split.** Photon's response already
+   returns a full place per result — name, address components, and
+   coordinates — in one call (confirmed live: `GET /api/?q=cambridge&limit=5`
+   returns `properties.name`/`city`/`county`/`state`/`country`/`postcode`
+   and `geometry.coordinates`). `MKLocalSearchCompletion`'s "no coordinate,
+   no public initializer" constraint, which the two-phase design existed to
+   work around, doesn't apply here — `search(query:)` returns `[Place]`
+   directly, same shape as the original CycleStreets geocoder.
+5. **OSM/ODbL attribution**, since Photon's data is OSM-derived. Per the
+   user: shown in `SettingsView`'s existing "About" section, not inline
+   near the search UI.
 
-## Why live streaming, not a wrapped single call
+## What survives from Tasks 1–2 of the original plan, what doesn't
 
-`MKLocalSearchCompleter` is delegate-based and, by design, can call back
-multiple times for one query as it refines results (fast local matches
-first, more complete results shortly after). An alternative considered was
-wrapping it in a single continuation per query (matching how
-`LocationService.currentLocation()` wraps `CLLocationManager`'s
-delegate), keeping today's 300ms debounce untouched — a smaller diff, but
-it would mean waiting for `completer.isSearching == false` before showing
-anything, closer to today's submit-and-wait feel than true typeahead.
+Two tasks of the MapKit-based plan were already implemented and committed
+before this pivot. Rather than revert that history, the revised
+implementation plan supersedes the obsolete pieces via new commits, the
+same way the original plan already deleted the CycleStreets geocoder in a
+later task:
 
-Since `MKLocalSearchCompleter` has no rate limit to protect against (unlike
-`MKLocalSearch`, which does) and is designed exactly for live-as-you-type
-use, forwarding every keystroke straight to `queryFragment` and streaming
-results back live is both the simpler mapping onto its actual API contract
-and the UX the user asked for. This removes `MapViewModel`'s manual debounce
-machinery (`searchDebounceMilliseconds`, the debounce `Task`) entirely.
+- **Kept:** the general shape of decoupling search from `APIClientProtocol`
+  into its own `LocationSearchProviding` protocol, injected via
+  `EnvironmentValues` the same way as `.apiClient`/`.locationService`. The
+  `Place(mapItem:)` MapKit-specific initializer is *not* reused (Photon
+  doesn't produce `MKMapItem`s) but the general "extract geocoding out of
+  the CycleStreets client" direction the roadmap doc originally raised is
+  still the right call.
+- **Deleted/replaced:** `SearchSuggestion` (no longer needed — Photon
+  returns full `Place`s), the `AsyncStream`/`updateQuery`/`updateRegion`/
+  `resolve` shape of `LocationSearchProviding` (replaced by a single
+  `search(query:near:)` call), `MapKitLocationSearchProvider.swift`
+  (deleted outright), `Place(mapItem:)` (MapKit-specific, deleted).
 
 ## Components
 
-### `Search/LocationSearchProviding.swift` (new)
+### `Search/LocationSearchProviding.swift` (revised)
 
 ```swift
-struct SearchSuggestion: Identifiable, Equatable {
-    let id: String
-    let title: String
-    let subtitle: String
-}
-
-@MainActor
-protocol LocationSearchProviding: AnyObject {
-    var suggestionsUpdates: AsyncStream<[SearchSuggestion]> { get }
-    func updateQuery(_ query: String)
-    func updateRegion(_ region: MKCoordinateRegion?)
-    func resolve(_ suggestion: SearchSuggestion) async throws -> Place
+protocol LocationSearchProviding: Sendable {
+    /// `near`, when provided, biases (not filters) results toward that
+    /// coordinate — a suggestion, not a hard requirement, per Photon's
+    /// `lat`/`lon`/`zoom` params.
+    func search(query: String, near coordinate: CLLocationCoordinate2D?) async throws -> [Place]
 }
 ```
 
-`SearchSuggestion` deliberately holds no coordinate — `MKLocalSearchCompletion`
-(what backs a live suggestion) has no public initializer, so it can't be
-stored on or reconstructed from a plain model usable in tests. Resolving to
-an actual `Place` is a separate, explicit step (`resolve`), run only when
-the user acts on a suggestion (tap to select, tap bookmark to save) — never
-for the full list of live suggestions, which would mean one `MKLocalSearch`
-call per keystroke per row instead of the free, unlimited completer.
+No longer `@MainActor`/`AnyObject` — unlike the MapKit version (a
+stateful delegate-callback wrapper that had to live on the actor
+`CLLocationManager`-style APIs deliver callbacks on), this is a stateless,
+plain `async throws` call over HTTP, matching `APIClientProtocol`'s
+existing style exactly (which also isn't `@MainActor`-isolated).
+`SearchSuggestion` and `LocationSearchError` are deleted — Photon results
+resolve to a `Place` in one step, so there's no "suggestion vs. resolved
+place" distinction and nothing can go stale between two calls.
 
-### `Search/MapKitLocationSearchProvider.swift` (new)
+### `Search/PhotonEndpoint.swift` (new)
 
-Real implementation, `NSObject` + `MKLocalSearchCompleterDelegate`:
+Pure URL-building, mirroring `Networking/Endpoints.swift`'s existing style
+(and fully unit-testable the same way `EndpointsTests`-style coverage
+already tests `Endpoints.geocode`/`journeyPlan`):
 
 ```swift
-enum LocationSearchError: Error {
-    /// `resolve` was called with a suggestion `id` from a results batch
-    /// that's since been replaced by a newer one.
-    case staleSuggestion
-    /// The resolved `MKLocalSearch` returned no map items.
-    case noResult
-}
+enum PhotonEndpoint {
+    private static let base = "https://photon.komoot.io/api/"
 
-final class MapKitLocationSearchProvider: NSObject, LocationSearchProviding {
-    let suggestionsUpdates: AsyncStream<[SearchSuggestion]>
-    private let continuation: AsyncStream<[SearchSuggestion]>.Continuation
-    private let completer = MKLocalSearchCompleter()
-    private var completionsByID: [String: MKLocalSearchCompletion] = [:]
-
-    override init() {
-        var continuation: AsyncStream<[SearchSuggestion]>.Continuation!
-        self.suggestionsUpdates = AsyncStream { continuation = $0 }
-        self.continuation = continuation
-        super.init()
-        completer.delegate = self
-    }
-
-    func updateQuery(_ query: String) { completer.queryFragment = query }
-
-    /// `nil` leaves `completer.region` at its Apple-supplied default (the
-    /// whole world), which is effectively unbiased.
-    func updateRegion(_ region: MKCoordinateRegion?) {
-        guard let region else { return }
-        completer.region = region
-    }
-
-    func resolve(_ suggestion: SearchSuggestion) async throws -> Place {
-        guard let completion = completionsByID[suggestion.id] else {
-            throw LocationSearchError.staleSuggestion
+    static func search(query: String, near coordinate: CLLocationCoordinate2D?) throws -> URL {
+        var c = URLComponents(string: base)!
+        var items = [
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "limit", value: "6"),
+        ]
+        if let coordinate {
+            items.append(URLQueryItem(name: "lat", value: "\(coordinate.latitude)"))
+            items.append(URLQueryItem(name: "lon", value: "\(coordinate.longitude)"))
         }
-        let response = try await MKLocalSearch(request: .init(completion: completion)).start()
-        guard let item = response.mapItems.first else { throw LocationSearchError.noResult }
-        return Place(mapItem: item)
-    }
-}
-
-extension MapKitLocationSearchProvider: MKLocalSearchCompleterDelegate {
-    func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
-        completionsByID = [:]
-        let suggestions = completer.results.map { completion in
-            let id = UUID().uuidString
-            completionsByID[id] = completion
-            return SearchSuggestion(id: id, title: completion.title, subtitle: completion.subtitle)
-        }
-        continuation.yield(suggestions)
-    }
-
-    func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
-        // Live suggestions failing mid-type isn't user-facing (matches how
-        // `search(query:)` today silently swallows cancellation from a
-        // superseded keystroke) — yield empty rather than surfacing an error.
-        continuation.yield([])
+        c.queryItems = items
+        guard let url = c.url else { throw URLError(.badURL) }
+        return url
     }
 }
 ```
 
-`completionsByID` is replaced wholesale on every update, so a suggestion's
-`id` is only valid against the results it was issued with. If a `resolve`
-call races a fresher update (the id vanishes from the map), it throws
-`.staleSuggestion` — surfaced the same way as any other resolve failure (see
-Error handling). This is an intentionally accepted edge case: it requires
-tapping a row in the narrow window between the list changing under it,
-which SwiftUI's synchronous re-render makes very unlikely in practice.
+`limit=6` matches the result count the original CycleStreets geocoder
+requested (`results=6`), for a consistent list length in the UI. No
+`zoom`/`location_bias_scale` override — Photon's documented defaults
+(`zoom=12`, `location_bias_scale=0.4`) are a reasonable "prefer nearby
+without hard-filtering far matches" behavior out of the box.
 
-A `Place(mapItem:)` initializer is added to `Place`: `name` from
-`mapItem.name`, `near` from the placemark's locality/administrative area
-(mirroring the existing `name`+`near` split used for CycleStreets results),
-`coordinate` from `mapItem.placemark.coordinate`, `id` a fresh `UUID()`.
+### `Search/PhotonGeocoderDecoder.swift` (new)
 
-Joins `LocationService` in SPEC.md's "build-verify-only" test-coverage
-bucket — a delegate-based wrapper around a concrete Apple type, not
-exercisable via `xcodebuild test` on a simulator.
+Pure decode function, mirroring `Networking/GeocoderDecoder.swift`'s
+existing style and equally unit-testable:
+
+```swift
+enum PhotonGeocoderDecoder {
+    private struct RawResponse: Decodable {
+        let features: [RawFeature]
+    }
+
+    private struct RawFeature: Decodable {
+        let properties: RawProperties
+        let geometry: RawGeometry
+    }
+
+    private struct RawProperties: Decodable {
+        let name: String?
+        let street: String?
+        let city: String?
+        let district: String?
+        let county: String?
+        let state: String?
+        let country: String?
+    }
+
+    private struct RawGeometry: Decodable {
+        let coordinates: [Double]
+    }
+
+    static func decode(_ data: Data) throws -> [Place] {
+        let raw = try JSONDecoder().decode(RawResponse.self, from: data)
+        return raw.features.compactMap { feature -> Place? in
+            guard feature.geometry.coordinates.count == 2 else { return nil }
+            let coordinate = Coordinate(
+                longitude: feature.geometry.coordinates[0],
+                latitude: feature.geometry.coordinates[1]
+            )
+            let props = feature.properties
+            let name = props.name ?? props.street ?? "Unknown location"
+            let nearParts = [props.city ?? props.district, props.county, props.state, props.country]
+                .compactMap { $0 }
+            let near = nearParts.isEmpty ? nil : nearParts.joined(separator: ", ")
+            return Place(id: UUID().uuidString, name: name, near: near, coordinate: coordinate)
+        }
+    }
+}
+```
+
+Field notes, confirmed against live responses: `properties.name` is present
+for named places (cities, POIs) but absent for some pure address results,
+where `street` is the closer analog — hence the fallback chain, matching
+the spirit of `GeocoderDecoder`'s handling of CycleStreets' own optional
+`near`. `near` prefers `city` (falling back to `district` when a result is
+itself a city/region with no separate city field, e.g. Cambridge's own
+top-level city result) then broadens through `county`/`state`/`country`,
+skipping whichever of those Photon omits for a given result — mirroring how
+CycleStreets' single optional `near` string worked, just assembled from
+more granular fields.
+
+### `Search/PhotonLocationSearchProvider.swift` (new)
+
+Thin async wrapper combining the two above with `URLSession`, the only
+piece that isn't unit-testable without network access (mirrors
+`APIClient`'s own untested-directly `session.data(from:)` calls — the
+already-established pattern in this codebase for the actual network hop,
+with `PhotonEndpoint`/`PhotonGeocoderDecoder` carrying the real test
+coverage):
+
+```swift
+final class PhotonLocationSearchProvider: LocationSearchProviding {
+    private let session: URLSession
+
+    init(session: URLSession = .shared) {
+        self.session = session
+    }
+
+    func search(query: String, near coordinate: CLLocationCoordinate2D?) async throws -> [Place] {
+        let url = try PhotonEndpoint.search(query: query, near: coordinate)
+        let (data, _) = try await session.data(from: url)
+        return try PhotonGeocoderDecoder.decode(data)
+    }
+}
+```
 
 ### `App/AppEnvironment.swift`
 
-New environment key, matching `.locationService`:
+Same shape as the (already-landed) Task 2, default value changes:
 
 ```swift
-extension EnvironmentValues {
-    var locationSearchProvider: any LocationSearchProviding {
-        get { self[LocationSearchProviderKey.self] }
-        set { self[LocationSearchProviderKey.self] = newValue }
-    }
+private struct LocationSearchProviderKey: EnvironmentKey {
+    static let defaultValue: any LocationSearchProviding = PhotonLocationSearchProvider()
 }
 ```
-Default value `MapKitLocationSearchProvider()`.
 
 ### `MapViewModel`
 
-- `searchResults: [Place]` → `searchResults: [SearchSuggestion] = []`.
-- Removed: `searchDebounceMilliseconds`, `searchDebounceTask`, `search(query:)`.
-- `init` gains a third dependency, `searchProvider: any LocationSearchProviding`,
-  alongside the existing `apiClient`/`locationService` parameters.
-- `searchTextChanged(_ text: String)` becomes a thin, synchronous forward:
+Closer to the *original* (pre-MapKit) shape than the MapKit design was —
+the debounce comes back essentially unchanged:
+
+- `searchResults: [Place]` — **unchanged type**, no `SearchSuggestion`.
+- `searchDebounceMilliseconds: UInt64 = 300` and `searchDebounceTask` —
+  **restored**, same as the pre-MapKit code.
+- `init` gains a third dependency, `searchProvider: any LocationSearchProviding`
+  (same DI shape Task 3 was always going to add — this part of the original
+  design didn't change).
+- `search(query:) async` — restored, now calling the new provider and
+  passing a cached bias coordinate:
   ```swift
-  func searchTextChanged(_ text: String) {
-      guard !text.isEmpty else { searchResults = []; return }
-      searchProvider.updateQuery(text)
+  func search(query: String) async {
+      guard !query.isEmpty else { searchResults = []; return }
+      do {
+          searchResults = try await searchProvider.search(query: query, near: biasCoordinate)
+      } catch {
+          guard !Task.isCancelled else { return }
+          errorMessage = error.localizedDescription
+      }
   }
   ```
-- `init` starts a long-lived `Task` consuming `searchProvider.suggestionsUpdates`
-  and assigning each batch to `searchResults`.
-- `init` also, if `locationService.isAuthorized`, fires a detached `Task` to
-  fetch `currentLocation()` and call `searchProvider.updateRegion(_:)` with a
-  generous ~1° (roughly 100km) span around it — wide enough to bias toward
-  "your general area" without acting as a hard filter, unlike the tight
-  0.05°-span zoom `MapView` uses when centering on a single selected place.
-  Best-effort and non-blocking: search remains usable immediately even
-  before/without a location fix, just unbiased until one lands.
-- New method, used by both tap-to-select and bookmark-to-save:
+- `searchTextChanged(_:)` — restored to the original debounce-`Task`
+  implementation, unchanged from before the MapKit detour.
+- `init` still does the location-bias fetch from the MapKit design, but
+  simplified: instead of pushing a region into a stateful provider, it
+  caches the coordinate on `self` for `search(query:)` to pass per call:
   ```swift
-  func resolve(_ suggestion: SearchSuggestion) async -> Place? {
-      do { return try await searchProvider.resolve(suggestion) }
-      catch { errorMessage = "Couldn't get details for that result. Please try again."; return nil }
-  }
+  private var biasCoordinate: CLLocationCoordinate2D?
   ```
+  populated by the same best-effort, non-blocking, `isAuthorized`-gated
+  `Task` as before (see the original design's rationale for why this never
+  prompts).
+- **No `resolve(_:)` method** — deleted. Nothing needs a second call
+  anymore; a `Place` from `searchResults` is already complete.
 
 ### `MapView`
 
-- `.onSubmit { Task { await vm.search(query: searchText) } }` is removed —
-  there's no `search(query:)` to call anymore, and it has no live
-  replacement to fall back to since results are already streaming as the
-  user types.
-- `resultsList`'s `List(vm.searchResults)` now iterates `[SearchSuggestion]`,
-  rendering `suggestion.title`/`suggestion.subtitle` where it rendered
-  `place.name`/`place.near` before.
-- `selectPlace(_ place: Place)` becomes `selectSuggestion(_ suggestion: SearchSuggestion)`:
-  resolves first, then runs the same logic as today (clear search text/results,
-  advance the From→To picker, animate the camera, call
-  `vm.selectPlace(_:as:)`) — the camera-update line moves inside the `Task`
-  since it needs the resolved coordinate, which isn't available until after
-  `resolve` returns:
-  ```swift
-  private func selectSuggestion(_ suggestion: SearchSuggestion) {
-      searchText = ""
-      vm.searchResults = []
-      let role = selectingFor
-      if role == .from { selectingFor = .to }
-      Task {
-          guard let place = await vm.resolve(suggestion) else { return }
-          withAnimation {
-              updateCamera(to: MKCoordinateRegion(
-                  center: place.clCoordinate,
-                  span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-              ))
-          }
-          await vm.selectPlace(place, as: role)
-          if vm.fromPlace != nil && vm.toPlace != nil { isSearchFieldFocused = false }
-      }
-  }
-  ```
-- The bookmark button's action becomes async too:
-  ```swift
-  Button {
-      Task {
-          guard let place = await vm.resolve(suggestion) else { return }
-          savedLocationsVM.save(name: place.name, coordinate: place.coordinate)
-          isPresentingLocationSavedConfirmation = true
-      }
-  } label: { Image(systemName: "bookmark") }
-  ```
-- The "Current Location" pinned row (`useCurrentLocation()`) is untouched —
-  it never went through `searchResults`/geocoding and still doesn't.
+Much closer to today's (pre-feature) code than the MapKit version was:
+
+- `.onSubmit { Task { await vm.search(query: searchText) } }` —
+  **restored** (immediate, non-debounced search on explicit submit,
+  exactly as it works today).
+- `resultsList`'s `List(vm.searchResults)` — **unchanged**, still iterates
+  `[Place]`, still renders `place.name`/`place.near`.
+- `selectPlace(_ place: Place)` — **unchanged**, no resolve step, no
+  `selectSuggestion` rename.
+- The bookmark button's action — **unchanged**, still synchronous
+  (`savedLocationsVM.save(name: place.name, coordinate: place.coordinate)`
+  directly), no `Task`/resolve wrapping needed.
+- The "Current Location" pinned row — unaffected, as before.
+
+In other words: of the `MapView` changes the MapKit design required, only
+the dependency-injection plumbing (new `locationSearchProvider` init
+parameter, threaded through from `RootView`) survives. The UI-facing
+behavior changes are gone because Photon's single-call shape needs none of
+them.
+
+### `SettingsView` — OSM attribution
+
+New rows in the existing "About" section (`Features/Settings/SettingsView.swift`),
+matching the existing `Link` style used for the CycleStreets website/GPL
+license:
+
+```swift
+Link("OpenStreetMap data (search)", destination: URL(string: "https://www.openstreetmap.org/copyright")!)
+Link("Photon geocoder", destination: URL(string: "https://photon.komoot.io")!)
+```
+
+Placed in Settings rather than inline near the search results, per the
+user's explicit choice — consistent with how the app already links out to
+licensing/attribution info (CycleStreets website, GPL) from that same
+section rather than surfacing it contextually elsewhere.
 
 ### Removed entirely
 
-`Endpoints.geocode`, `Networking/GeocoderDecoder.swift` (+ its test file
-`GeocoderDecoderTests`), `geocode(query:)` from `APIClientProtocol`/
-`APIClient`, and `MockAPIClient`'s geocode-related fields
-(`placesToReturn`, `geocodeQueriesReceived`, `geocodeDelayMilliseconds`).
+Same as the original design: `Endpoints.geocode`, `Networking/GeocoderDecoder.swift`
+(+ `GeocoderDecoderTests`), `geocode(query:)` from `APIClientProtocol`/
+`APIClient`, `MockAPIClient`'s geocode-related fields. Additionally now:
+`SearchSuggestion`, `LocationSearchError`, `Place(mapItem:)`,
+`MapKitLocationSearchProvider.swift` — all MapKit-specific, all obsolete.
 
 ## Error handling
 
-- **Live suggestions failing** (`completer(_:didFailWithError:)`): silent —
-  yields an empty list, no `errorMessage`. Matches today's treatment of a
-  superseded/cancelled search as a non-error.
-- **Resolve failing** (tap-to-select or tap-to-bookmark): sets
-  `errorMessage` to "Couldn't get details for that result. Please try
-  again." — a discrete, user-initiated action, so unlike live suggestions
-  this is worth surfacing (mirrors `useCurrentLocation`'s generic-failure
-  handling).
-- **Region bias fetch failing** (init-time, best-effort): silent — search
-  proceeds unbiased. Not user-initiated, so no error surface; matches the
-  "never prompt/error for background convenience fetches" spirit of
-  `isLocationAuthorized`'s non-prompting design.
+- **Search failing**: sets `errorMessage`, exactly as the original
+  CycleStreets-backed `search(query:)` did — ignoring `Task.isCancelled`
+  so a superseded in-flight request from a stale keystroke isn't
+  user-facing (same rationale as before, now doubly relevant since a
+  cancelled debounced request is the common case, not an edge case).
+- **Bias-coordinate fetch failing** (init-time, best-effort): silent —
+  search proceeds unbiased. Unchanged rationale from the original design.
 
 ## Testing
 
-- `Search/MockLocationSearchProvider.swift` (new, test target): conforms to
-  `LocationSearchProviding`; records `updateQuery`/`updateRegion` calls;
-  exposes its own stream continuation so tests can push suggestion batches
-  on demand; `resolveResult: Result<Place, Error>` (or per-id dictionary)
-  stubs `resolve`.
-- `MapViewModelTests`: the debounce-specific tests
-  (`testSearchTextChangedDebouncesAndSearches`,
+- `PhotonEndpoint`/`PhotonGeocoderDecoder` are fully unit-tested, pure
+  functions — no network, no mocking, mirroring `EndpointsTests`-style
+  coverage and `GeocoderDecoderTests` exactly (URL query-item assertions;
+  decode assertions against realistic fixture JSON, including a result
+  missing `name`/`city` to exercise the fallback chains).
+- `Search/MockLocationSearchProvider.swift` (test double, replacing the
+  MapKit-shaped one from the superseded Task 3 groundwork): conforms to
+  the new single-method protocol — `queriesReceived: [(String, CLLocationCoordinate2D?)]`,
+  `resultsToReturn: [Place]`, `errorToThrow: Error?`. Much simpler than the
+  stream-based mock the MapKit design needed.
+- `MapViewModelTests`: restores the original pre-MapKit debounce test
+  suite almost verbatim (`testSearchTextChangedDebouncesAndSearches`,
   `testSearchTextChangedCancelsPendingSearchOnRapidTyping`,
+  `testSearchTextChangedDoesNotSetErrorMessageWhenDebounceFires`,
   `testSearchTextChangedDoesNotSetErrorMessageWhenInFlightSearchIsSuperseded`,
-  `testSearchTextChangedDoesNotSetErrorMessageWhenDebounceFires`) are
-  removed since there's no debounce left to test. New coverage:
-  query-forwarding (`updateQuery` called with the typed text),
-  stream-to-`searchResults` propagation, `resolve` success/failure
-  (including the error-message text), and region-bias gating
-  (`updateRegion` called when `MockLocationService.isAuthorized == true`,
-  not called otherwise). `testSearchTextChangedWithEmptyQueryClearsResultsImmediately`
-  is kept, adapted to the new signature.
-- `MapKitLocationSearchProvider` and the `MapView` wiring changes (list
-  rendering, async button actions) are build-verify-only, per the existing
-  convention for pure-SwiftUI-wiring and Apple-API-delegate-wrapper code.
+  `testSearchTextChangedWithEmptyQueryClearsResultsImmediately`), now
+  against `MockLocationSearchProvider` instead of `MockAPIClient`. New
+  coverage: bias-coordinate gating (`search` called with a non-nil `near`
+  when `MockLocationService.isAuthorized == true`, `nil` otherwise).
+- `PhotonLocationSearchProvider` itself (the `URLSession` hop) joins
+  `APIClient`'s existing untested-directly network call — not a new gap,
+  the same shape of gap this codebase already accepts for `APIClient`.
+- `MapView`'s wiring changes (only the new init parameter) are
+  build-verify-only, same convention as always for pure DI plumbing.
 
 ## Out of scope
 
-- Any change to `useCurrentLocation(as:)`/the "Current Location" row —
-  untouched, doesn't go through search.
-- A CycleStreets-vs-MapKit comparison step — superseded by the direct
-  replacement decision; not performed as separate throwaway work.
-- Reverse geocoding for anything beyond what `MKLocalSearch` already returns
-  in a resolved `MKMapItem`.
+- Any change to `useCurrentLocation(as:)`/the "Current Location" row.
+- Self-hosting Photon, or any fallback if the public demo instance is
+  unavailable/throttled — accepted risk of using a free public demo,
+  matching the same trade-off already accepted for Thunderforest/CyclOSM's
+  free tiers elsewhere in this app.
 - Editable saved-location names (separate roadmap item, unrelated).
+- A CycleStreets-vs-Photon side-by-side comparison — not performed, same
+  reasoning as the original design's straight-replacement decision.
