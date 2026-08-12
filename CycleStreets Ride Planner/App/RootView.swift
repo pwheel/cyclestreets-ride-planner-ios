@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(\.apiClient) private var apiClient
     @Environment(\.locationService) private var locationService
+    @Environment(\.locationSearchProvider) private var locationSearchProvider
     @State private var selectedTab: Tab = .map
     @State private var pendingMapJourney: Journey?
     @State private var pendingPlaceSelection: PendingPlaceSelection?
@@ -12,7 +13,7 @@ struct RootView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             NavigationStack {
-                MapView(apiClient: apiClient, locationService: locationService, pendingJourney: $pendingMapJourney, pendingPlaceSelection: $pendingPlaceSelection)
+                MapView(apiClient: apiClient, locationService: locationService, locationSearchProvider: locationSearchProvider, pendingJourney: $pendingMapJourney, pendingPlaceSelection: $pendingPlaceSelection)
             }
             .tabItem { Label("Map", systemImage: "map") }
             .tag(Tab.map)
