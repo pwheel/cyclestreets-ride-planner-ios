@@ -55,10 +55,10 @@ final class MapViewModel {
     private let searchProvider: any LocationSearchProviding
     private var searchDebounceTask: Task<Void, Never>?
 
-    /// Best-effort location bias for `search(query:)`, populated once at
-    /// `init` if location access is already authorized (never prompts).
-    /// Deliberately not `private` — tests poll it directly to know when the
-    /// background fetch has completed.
+    /// Best-effort location bias for `search(query:)`, populated by
+    /// `loadBiasCoordinateIfAuthorized()` if location access is already
+    /// authorized (never prompts). Deliberately not `private` — tests poll
+    /// it directly to know when the background fetch has completed.
     var biasCoordinate: CLLocationCoordinate2D?
 
     init(apiClient: any APIClientProtocol, locationService: any LocationServiceProtocol, searchProvider: any LocationSearchProviding, initialSelectedPlan: RoutePlan = .balanced) {
@@ -66,16 +66,19 @@ final class MapViewModel {
         self.locationService = locationService
         self.searchProvider = searchProvider
         self.selectedPlan = initialSelectedPlan
+    }
 
-        // Best-effort, one-shot: bias search results toward the device's
-        // location if it's already authorized. Never triggers the permission
-        // prompt itself — opening search must not surprise the user with one.
-        if locationService.isAuthorized {
-            Task { [weak self] in
-                guard let self else { return }
-                guard let coordinate = try? await self.locationService.currentLocation() else { return }
-                self.biasCoordinate = coordinate
-            }
+    /// Best-effort, one-shot: bias search results toward the device's location
+    /// if it's already authorized. Never triggers the permission prompt itself.
+    /// Call this once from the owning view's lifecycle (not from init — init
+    /// runs on every reconstruction of a throwaway MapViewModel value, even
+    /// when @State discards it, so a side effect there would fire repeatedly).
+    func loadBiasCoordinateIfAuthorized() {
+        guard locationService.isAuthorized else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            guard let coordinate = try? await self.locationService.currentLocation() else { return }
+            self.biasCoordinate = coordinate
         }
     }
 

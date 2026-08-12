@@ -386,6 +386,7 @@ final class MapViewModelTests {
         locationService.isAuthorized = true
         locationService.coordinateToReturn = CLLocationCoordinate2D(latitude: 51.5, longitude: -0.1)
         let vm2 = MapViewModel(apiClient: client, locationService: locationService, searchProvider: searchProvider)
+        vm2.loadBiasCoordinateIfAuthorized()
         try await waitUntil { vm2.biasCoordinate != nil }
         #expect(vm2.biasCoordinate?.latitude == 51.5)
         #expect(vm2.biasCoordinate?.longitude == -0.1)
@@ -394,6 +395,7 @@ final class MapViewModelTests {
     @Test func testBiasCoordinateNotSetWhenLocationUnauthorized() async throws {
         locationService.isAuthorized = false
         let vm2 = MapViewModel(apiClient: client, locationService: locationService, searchProvider: searchProvider)
+        vm2.loadBiasCoordinateIfAuthorized()
         try await Task.sleep(for: .milliseconds(50))
         #expect(vm2.biasCoordinate == nil)
     }
@@ -402,10 +404,26 @@ final class MapViewModelTests {
         locationService.isAuthorized = true
         locationService.coordinateToReturn = CLLocationCoordinate2D(latitude: 51.5, longitude: -0.1)
         let vm2 = MapViewModel(apiClient: client, locationService: locationService, searchProvider: searchProvider)
+        vm2.loadBiasCoordinateIfAuthorized()
         try await waitUntil { vm2.biasCoordinate != nil }
         await vm2.search(query: "Cambridge")
         #expect(searchProvider.queriesReceived.last?.near?.latitude == 51.5)
         #expect(searchProvider.queriesReceived.last?.near?.longitude == -0.1)
+    }
+
+    /// Proves the side effect moved out of `init`: constructing a
+    /// `MapViewModel` with an already-authorized location service must not,
+    /// on its own, populate `biasCoordinate` — only an explicit
+    /// `loadBiasCoordinateIfAuthorized()` call should trigger the fetch.
+    /// This guards against the GPS-fetch-on-every-discarded-reconstruction
+    /// bug `MapView` previously had via `@State(initialValue:)`.
+    @Test func testInitAloneDoesNotPopulateBiasCoordinateEvenWhenAuthorized() async throws {
+        locationService.isAuthorized = true
+        locationService.coordinateToReturn = CLLocationCoordinate2D(latitude: 51.5, longitude: -0.1)
+        let vm2 = MapViewModel(apiClient: client, locationService: locationService, searchProvider: searchProvider)
+        // Give any errant background work a chance to run before asserting.
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(vm2.biasCoordinate == nil)
     }
 
     @Test func testSearchPassesNilNearWhenNoBiasCoordinate() async throws {

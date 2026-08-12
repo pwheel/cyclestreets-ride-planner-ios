@@ -20,7 +20,15 @@ final class PhotonLocationSearchProvider: LocationSearchProviding {
 
     func search(query: String, near coordinate: CLLocationCoordinate2D?) async throws -> [Place] {
         let url = try PhotonEndpoint.search(query: query, near: coordinate)
-        let (data, _) = try await session.data(from: url)
+        let (data, response) = try await session.data(from: url)
+        // Photon's public demo policy is "reasonable use only — extensive
+        // usage will be throttled or completely banned," so a non-2xx
+        // response is an expected failure mode, not a rare edge case.
+        // Without this check, a throttled/error body falls straight into
+        // JSONDecoder and surfaces as a confusing generic decode error.
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
         return try PhotonGeocoderDecoder.decode(data)
     }
 }

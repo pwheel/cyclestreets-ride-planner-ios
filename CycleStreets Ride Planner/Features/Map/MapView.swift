@@ -231,6 +231,14 @@ struct MapView: View {
             guard vm.isLocationAuthorized else { return }
             startTrackingCurrentLocation()
         }
+        // One-shot bias-coordinate fetch, tied to this view's real lifetime
+        // (not `MapViewModel.init`, which runs on every discarded
+        // reconstruction of the `@State` value — e.g. every tab switch).
+        // `.task` only runs once per view identity, matching that intent
+        // without an extra `@State` guard flag.
+        .task {
+            vm.loadBiasCoordinateIfAuthorized()
+        }
     }
 
     @ViewBuilder
