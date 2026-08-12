@@ -48,7 +48,7 @@ Turn-by-turn view of a planned `Journey`. `ItineraryViewModel` (plain, not `@Obs
 `SavedLocationsViewModel`: `load()`, `save(name:coordinate:)`, `delete(at:)`. No networking dependency. `SavedLocationsView` rows are tappable; a confirmation dialog picks From/To, then hands the `Place` + role to the Map tab.
 
 ### Settings (`Features/Settings/`)
-`@AppStorage`-backed: `"defaultRoutePlan"` (default `.balanced`) — read by `MapView` at construction to seed `MapViewModel`'s initial `selectedPlan` (which of the 3 always-fetched route plans is pre-selected), not which plan is requested; `"useMetric"` (default `true`). Plus an About section (version, links). A third `@AppStorage` key, `"mapStyle"` (default `MapStyleOption.cyclOSM`), also persists across launches but isn't a Settings-screen toggle — it's read/written directly by `MapView`'s `layersButton`/`MapStyleSheet` picker (see Map screen section above).
+`@AppStorage`-backed: `"defaultRoutePlan"` (default `.balanced`) — read by `MapView` at construction to seed `MapViewModel`'s initial `selectedPlan` (which of the 3 always-fetched route plans is pre-selected), not which plan is requested; `"useMetric"` (default `true`). Plus an About section (version, links — including OpenStreetMap/Photon attribution for the Map screen's search, per GitHub #19). A third `@AppStorage` key, `"mapStyle"` (default `MapStyleOption.cyclOSM`), also persists across launches but isn't a Settings-screen toggle — it's read/written directly by `MapView`'s `layersButton`/`MapStyleSheet` picker (see Map screen section above).
 
 ### GPX Export (`Features/GPX/`)
 `GPXExportButton(journeyID:plan:)` downloads via `apiClient.downloadGPX`, writes to a temp file, presents a `UIActivityViewController` share sheet.
@@ -132,7 +132,7 @@ Thunderforest tile-provider key follows the identical pattern: `Resources/Thunde
 
 ## Known limitations / roadmap
 
-Not implemented, captured for future design in `docs/superpowers/plans/2026-07-19-roadmap-multi-route-comparison.md`: switchable geocoder provider (CycleStreets vs MapKit, flag-based), editable saved-location names.
+Not implemented, captured for future design in `docs/superpowers/plans/2026-07-19-roadmap-multi-route-comparison.md`: editable saved-location names.
 
 Simultaneous multi-route comparison (quietest/balanced/fastest shown together) is implemented — see the Map screen section above. Design record: `docs/superpowers/specs/2026-07-25-multi-route-comparison-design.md`; implementation plan: `docs/superpowers/plans/2026-07-25-multi-route-comparison.md`.
 
@@ -141,3 +141,5 @@ OSM tile-based map rendering (GitHub #9) is implemented — see the Map screen s
 "Current Location" as a route waypoint (GitHub #6, route-planning half) is implemented — see the Map screen section above. Design record: `docs/superpowers/specs/2026-07-26-current-location-search-design.md`; implementation plan: `docs/superpowers/plans/2026-08-01-current-location-search.md`.
 
 Map auto-centering and a recenter button (GitHub #6, remaining half) are implemented — see the Map screen section above. Design record: `docs/superpowers/specs/2026-08-02-map-location-centering-design.md`; implementation plan: `docs/superpowers/plans/2026-08-02-map-location-centering.md`.
+
+Location search (GitHub #19) now uses [Photon](https://photon.komoot.io), a public OSM-data-backed geocoder, instead of CycleStreets' own geocoder — a straight replacement, not a flag-based dual-provider system. Originally scoped around Apple MapKit; revised mid-implementation once it became clear Apple's MapKit terms restrict search-result usage to Apple's own map, conflicting with this app's OSM-tile rendering (GitHub #9). Design record: `docs/superpowers/specs/2026-08-08-improve-typeahead-design.md`; implementation plan: `docs/superpowers/plans/2026-08-08-improve-typeahead.md`.
