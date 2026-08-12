@@ -103,11 +103,10 @@ follows the identical DI pattern as `.apiClient`/`.locationService`
 
 ## Networking — CycleStreets API contract (as verified live, not as originally planned)
 
-`Networking/Endpoints.swift` builds URLs; `Networking/APIClient.swift` fetches + delegates decoding; `APIClientProtocol`: `planJourney(from:to:plan:)`, `geocode(query:)`, `downloadGPX(journeyID:plan:)`, `reloadJourney(itineraryID:plan:)`.
+`Networking/Endpoints.swift` builds URLs; `Networking/APIClient.swift` fetches + delegates decoding; `APIClientProtocol`: `planJourney(from:to:plan:)`, `downloadGPX(journeyID:plan:)`, `reloadJourney(itineraryID:plan:)`. (Geocoding/search moved to `LocationSearchProviding` — see "Search" above; it's no longer part of the CycleStreets API surface.)
 
 - **Journey planning** is v1, not v2: `GET https://www.cyclestreets.net/api/journey.json` with `key`, `plan`, `itinerarypoints=lon,lat|lon,lat`, `reporterrors=1`, `segments=1`. Response is the `marker`/`@attributes` shape with all-string-typed fields and space-separated coordinate strings — decoded by `JourneyPlanDecoder` (not `Codable` directly on `Journey`).
 - **Reload** (re-fetch a previously-planned journey by ID, e.g. for a saved route) uses the same endpoint with `itinerary=<id>` instead of `itinerarypoints`.
-- **Geocoding** is v2: `GET https://api.cyclestreets.net/v2/geocoder` with `key`, `q`, `results=6`, `format=json`. Response is a GeoJSON `FeatureCollection` — decoded by `GeocoderDecoder`, which synthesizes `Place.id` via `UUID()` since the API returns none.
 - **GPX export** is *not* part of the JSON API — it's served from the public website URL namespace (`https://www.cyclestreets.net/journey/<id>/cyclestreets<id><plan>.gpx`), no API key required.
 - No authenticated user session is needed for any of the above — verified live. There is no login/account feature (intentionally descoped — see `docs/superpowers/plans/2026-07-19-uat-findings-v1.md` Finding 2).
 
@@ -127,7 +126,7 @@ Thunderforest tile-provider key follows the identical pattern: `Resources/Thunde
 
 ## Test coverage
 
-`CycleStreets Ride PlannerTests/`: `Networking/{APIKeyTests, APIClientTests, GeocoderDecoderTests, JourneyPlanDecoderTests, MockAPIClient}`, `Features/{MapViewModelTests, ItineraryViewModelTests, SavedRoutesViewModelTests, MapStyleOptionTests}`, `Models/{JourneyTests}`, `Persistence/{RouteStoreTests, LocationStoreTests}`, `Location/{MockLocationService}`, `Search/{PhotonEndpointTests, PhotonGeocoderDecoderTests}`.
+`CycleStreets Ride PlannerTests/`: `Networking/{APIKeyTests, APIClientTests, JourneyPlanDecoderTests, MockAPIClient}`, `Features/{MapViewModelTests, ItineraryViewModelTests, SavedRoutesViewModelTests, MapStyleOptionTests}`, `Models/{JourneyTests}`, `Persistence/{RouteStoreTests, LocationStoreTests}`, `Location/{MockLocationService}`, `Search/{PhotonEndpointTests, PhotonGeocoderDecoderTests}`.
 
 **Known gaps** (pure-SwiftUI-wiring or genuinely hard-to-unit-test, treated as build-verify-only per project convention): `SavedLocationsViewModel`, `SettingsView`, `GPXExportButton`, `ItineraryView`, `SavedRoutesView`, `Endpoints`, `MapStyleSheet`, `MapStyleThumbnail`, `LocationService` (the real `CLLocationManager` wrapper — not exercisable via `xcodebuild test` on a simulator without a simulated GPX location).
 

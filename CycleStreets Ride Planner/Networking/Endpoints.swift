@@ -7,8 +7,6 @@ import Foundation
 import CoreLocation
 
 enum Endpoints {
-    private static let base = "https://api.cyclestreets.net/v2"
-
     /// Journey planning is still on the v1 API (see
     /// https://www.cyclestreets.net/api/v1/journey/) — the v2 `/journey.json`
     /// path used previously does not exist.
@@ -48,18 +46,6 @@ enum Endpoints {
             .init(name: "itinerary",    value: "\(itinerary)"),
             .init(name: "reporterrors", value: "1"),
             .init(name: "segments",     value: "1"),
-        ]
-        guard let url = c.url else { throw URLError(.badURL) }
-        return url
-    }
-
-    static func geocode(query: String, apiKey: String) throws -> URL {
-        var c = URLComponents(string: "\(base)/geocoder")!
-        c.queryItems = [
-            .init(name: "key",     value: apiKey),
-            .init(name: "q",       value: query),
-            .init(name: "results", value: "6"),
-            .init(name: "format",  value: "json"),
         ]
         guard let url = c.url else { throw URLError(.badURL) }
         return url

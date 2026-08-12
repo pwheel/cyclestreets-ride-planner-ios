@@ -9,11 +9,8 @@ import CoreLocation
 
 final class MockAPIClient: APIClientProtocol {
     var journeyToReturn: Journey?
-    var placesToReturn: [Place] = []
     var gpxDataToReturn = Data("gpx content".utf8)
     var shouldThrow: Error?
-    var geocodeQueriesReceived: [String] = []
-    var geocodeDelayMilliseconds: UInt64 = 0
     var journeysByPlan: [RoutePlan: Journey] = [:]
     var errorsByPlan: [RoutePlan: Error] = [:]
 
@@ -27,17 +24,6 @@ final class MockAPIClient: APIClientProtocol {
         if let error = errorsByPlan[plan] { throw error }
         try checkThrow()
         return journeysByPlan[plan] ?? journeyToReturn ?? makeJourney(plan: plan)
-    }
-
-    func geocode(query: String) async throws -> [Place] {
-        try Task.checkCancellation()
-        if geocodeDelayMilliseconds > 0 {
-            try await Task.sleep(for: .milliseconds(geocodeDelayMilliseconds))
-        }
-        try Task.checkCancellation()
-        try checkThrow()
-        geocodeQueriesReceived.append(query)
-        return placesToReturn
     }
 
     func downloadGPX(journeyID: Int, plan: RoutePlan) async throws -> Data {

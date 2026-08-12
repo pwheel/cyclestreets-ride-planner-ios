@@ -26,11 +26,6 @@ struct APIClientTests {
         #expect(items["segments"] == "1")
     }
 
-    @Test func testGeocodeBuildsCorrectURL() throws {
-        let url = try Endpoints.geocode(query: "Cambridge", apiKey: "k")
-        #expect(url.absoluteString.contains("Cambridge"))
-    }
-
     @Test func testGpxExportBuildsCorrectURL() throws {
         let url = try Endpoints.gpxExport(journeyID: 123700734, plan: .quietest)
         #expect(url.absoluteString == "https://www.cyclestreets.net/journey/123700734/cyclestreets123700734quietest.gpx")
