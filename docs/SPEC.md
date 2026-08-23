@@ -1,4 +1,4 @@
-# SPEC — CycleStreets Ride Planner (iOS)
+# SPEC — Wheel Routes (iOS)
 
 > Living document. Describes what's actually built, not what was originally planned.
 > **Must be updated in the same PR/commit as any change that adds, removes, or materially changes a screen, ViewModel, API contract, persistence schema, or cross-cutting pattern.** See `docs/REVIEW_CHECKLIST.md`.
@@ -126,7 +126,7 @@ Thunderforest tile-provider key follows the identical pattern: `Resources/Thunde
 
 ## Test coverage
 
-`CycleStreets Ride PlannerTests/`: `Networking/{APIKeyTests, APIClientTests, JourneyPlanDecoderTests, MockAPIClient}`, `Features/{MapViewModelTests, ItineraryViewModelTests, SavedRoutesViewModelTests, MapStyleOptionTests}`, `Models/{JourneyTests}`, `Persistence/{RouteStoreTests, LocationStoreTests}`, `Location/{MockLocationService}`, `Search/{PhotonEndpointTests, PhotonGeocoderDecoderTests}`.
+`Wheel RoutesTests/`: `Networking/{APIKeyTests, APIClientTests, JourneyPlanDecoderTests, MockAPIClient}`, `Features/{MapViewModelTests, ItineraryViewModelTests, SavedRoutesViewModelTests, MapStyleOptionTests}`, `Models/{JourneyTests}`, `Persistence/{RouteStoreTests, LocationStoreTests}`, `Location/{MockLocationService}`, `Search/{PhotonEndpointTests, PhotonGeocoderDecoderTests}`.
 
 **Known gaps** (pure-SwiftUI-wiring or genuinely hard-to-unit-test, treated as build-verify-only per project convention): `SavedLocationsViewModel`, `SettingsView`, `GPXExportButton`, `ItineraryView`, `SavedRoutesView`, `Endpoints`, `MapStyleSheet`, `MapStyleThumbnail`, `LocationService` (the real `CLLocationManager` wrapper — not exercisable via `xcodebuild test` on a simulator without a simulated GPX location).
 

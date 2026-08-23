@@ -30,8 +30,8 @@ jobs:
       - name: Run test suite
         run: |
           xcodebuild test \
-            -project "CycleStreets Ride Planner.xcodeproj" \
-            -scheme "CycleStreets Ride Planner" \
+            -project "Wheel Routes.xcodeproj" \
+            -scheme "Wheel Routes" \
             -destination "platform=iOS Simulator,name=iPhone 17" \
-            -skip-testing:"CycleStreets Ride PlannerUITests" \
+            -skip-testing:"Wheel RoutesUITests" \
             -skipMacroValidation
