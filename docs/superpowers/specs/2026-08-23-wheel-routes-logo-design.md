@@ -1,10 +1,9 @@
 # Design: Wheel Routes app icon and wordmark
 
-> No app icon exists yet — `Assets.xcassets/AppIcon.appiconset/Contents.json`
-> declares the 3 required iOS slots (any/dark/tinted appearance, 1024x1024)
-> but has never had artwork assigned. This spec locks the visual concept;
-> producing the actual `.appiconset` PNGs/SVG source is a follow-up
-> implementation task, not covered here.
+> `Assets.xcassets/AppIcon.appiconset` previously declared its 3 required
+> iOS slots (any/dark/tinted appearance, 1024x1024) with no artwork
+> assigned. This spec locks the visual concept and, in the same change,
+> produces the actual artwork — see "Production artwork" below.
 
 ## Summary
 
@@ -78,11 +77,28 @@ the app-icon slot itself:
 Typeface is left as system sans-serif (`-apple-system`/Helvetica Neue) for
 now — no custom typeface has been evaluated or chosen.
 
+## Production artwork
+
+`docs/branding/generate_icon.py` derives the icon geometry from the exact
+constants in this spec (bearings, radii as fractions of canvas size) and
+writes `icon-color.svg` / `icon-tinted.svg` next to itself — regenerate
+with `python3 generate_icon.py`, then rasterize with `rsvg-convert -w 1024
+-h 1024 <file>.svg -o <file>.png` (`brew install librsvg` if it's not on
+the machine). This is the source of truth for the icon shape; hand-editing
+the SVGs directly will drift from it.
+
+`icon-color.svg` is full-bleed (no rounded-corner mask baked in — iOS
+applies its own squircle mask) and opaque, used for both the default and
+dark `AppIcon.appiconset` slots as `icon-1024.png`/`icon-1024-dark.png`
+respectively (identical pixels, distinct files, per the "reuse the same
+art" decision above). `icon-tinted.svg` is the bespoke monochrome variant
+for the tinted slot: white glyph on a transparent background (no
+background rect, no color variation between the needle's tip and tail),
+since iOS composites its own tint color underneath and works from the
+image's alpha/luminance rather than its hue.
+
 ## Out of scope for this spec
 
-- Producing final vector artwork and the actual iOS `AppIcon.appiconset`
-  PNG exports (all required sizes, plus the dark/tinted appearance
-  variants the `Contents.json` already declares slots for).
 - Wiring a wordmark lockup into any actual screen (About section, splash
   screen) — none of the three lockups above are used anywhere in the app
   yet; this spec only fixes what they should look like when that work
