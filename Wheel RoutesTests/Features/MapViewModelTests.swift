@@ -34,16 +34,18 @@ private func waitUntil(
 final class MapViewModelTests {
     let client: MockAPIClient
     let locationService: MockLocationService
+    let searchProvider: MockLocationSearchProvider
     let vm: MapViewModel
 
     init() {
         client = MockAPIClient()
         locationService = MockLocationService()
-        vm = MapViewModel(apiClient: client, locationService: locationService)
+        searchProvider = MockLocationSearchProvider()
+        vm = MapViewModel(apiClient: client, locationService: locationService, searchProvider: searchProvider)
     }
 
     @Test func testSearchUpdatesPlaces() async throws {
-        client.placesToReturn = [
+        searchProvider.resultsToReturn = [
             Place(id: "1", name: "Cambridge", near: "Cambridgeshire",
                   coordinate: Coordinate(longitude: 0.1218, latitude: 52.2053))
         ]
@@ -102,10 +104,9 @@ final class MapViewModelTests {
     }
 
     @Test func testLoadJourneyClearsSearchResultsAndError() {
-        client.placesToReturn = [
+        vm.searchResults = [
             Place(id: "1", name: "Cambridge", near: nil, coordinate: Coordinate(longitude: 0, latitude: 0))
         ]
-        vm.searchResults = client.placesToReturn
         vm.errorMessage = "stale error"
         vm.loadJourney(client.makeJourney())
         #expect(vm.searchResults.isEmpty)
@@ -269,31 +270,31 @@ final class MapViewModelTests {
 
     @Test func testSearchTextChangedDebouncesAndSearches() async throws {
         vm.searchDebounceMilliseconds = 100
-        client.placesToReturn = [
+        searchProvider.resultsToReturn = [
             Place(id: "1", name: "Cambridge", near: "Cambridgeshire",
                   coordinate: Coordinate(longitude: 0.1218, latitude: 52.2053))
         ]
         vm.searchTextChanged("Cambridge")
         try await waitUntil { vm.searchResults.count == 1 }
         #expect(vm.searchResults.count == 1)
-        #expect(client.geocodeQueriesReceived == ["Cambridge"])
+        #expect(searchProvider.queriesReceived.map(\.query) == ["Cambridge"])
     }
 
     @Test func testSearchTextChangedCancelsPendingSearchOnRapidTyping() async throws {
         vm.searchDebounceMilliseconds = 150
-        client.placesToReturn = [
+        searchProvider.resultsToReturn = [
             Place(id: "1", name: "Cambridge", near: nil, coordinate: Coordinate(longitude: 0, latitude: 0))
         ]
         vm.searchTextChanged("Ca")
         try await Task.sleep(for: .milliseconds(50))
         vm.searchTextChanged("Cambridge")
-        try await waitUntil { client.geocodeQueriesReceived == ["Cambridge"] }
-        #expect(client.geocodeQueriesReceived == ["Cambridge"])
+        try await waitUntil { searchProvider.queriesReceived.map(\.query) == ["Cambridge"] }
+        #expect(searchProvider.queriesReceived.map(\.query) == ["Cambridge"])
     }
 
     @Test func testSearchTextChangedDoesNotSetErrorMessageWhenDebounceFires() async throws {
         vm.searchDebounceMilliseconds = 10
-        client.placesToReturn = [
+        searchProvider.resultsToReturn = [
             Place(id: "1", name: "Cambridge", near: nil, coordinate: Coordinate(longitude: 0, latitude: 0))
         ]
         vm.searchTextChanged("Cambridge")
@@ -304,8 +305,8 @@ final class MapViewModelTests {
 
     @Test func testSearchTextChangedDoesNotSetErrorMessageWhenInFlightSearchIsSuperseded() async throws {
         vm.searchDebounceMilliseconds = 10
-        client.geocodeDelayMilliseconds = 100
-        client.placesToReturn = [
+        searchProvider.delayMilliseconds = 100
+        searchProvider.resultsToReturn = [
             Place(id: "1", name: "Cambridge", near: nil, coordinate: Coordinate(longitude: 0, latitude: 0))
         ]
         vm.searchTextChanged("Ca")
@@ -317,7 +318,7 @@ final class MapViewModelTests {
     }
 
     @Test func testInitSetsSelectedPlanFromInitialValue() {
-        let vm2 = MapViewModel(apiClient: client, locationService: locationService, initialSelectedPlan: .fastest)
+        let vm2 = MapViewModel(apiClient: client, locationService: locationService, searchProvider: searchProvider, initialSelectedPlan: .fastest)
         #expect(vm2.selectedPlan == .fastest)
     }
 
@@ -379,5 +380,54 @@ final class MapViewModelTests {
         vm.loadJourney(journey)
         #expect(vm.selectedPlan == .fastest)
         #expect(vm.currentJourney == journey)
+    }
+
+    @Test func testBiasCoordinateSetWhenLocationAuthorized() async throws {
+        locationService.isAuthorized = true
+        locationService.coordinateToReturn = CLLocationCoordinate2D(latitude: 51.5, longitude: -0.1)
+        let vm2 = MapViewModel(apiClient: client, locationService: locationService, searchProvider: searchProvider)
+        vm2.loadBiasCoordinateIfAuthorized()
+        try await waitUntil { vm2.biasCoordinate != nil }
+        #expect(vm2.biasCoordinate?.latitude == 51.5)
+        #expect(vm2.biasCoordinate?.longitude == -0.1)
+    }
+
+    @Test func testBiasCoordinateNotSetWhenLocationUnauthorized() async throws {
+        locationService.isAuthorized = false
+        let vm2 = MapViewModel(apiClient: client, locationService: locationService, searchProvider: searchProvider)
+        vm2.loadBiasCoordinateIfAuthorized()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(vm2.biasCoordinate == nil)
+    }
+
+    @Test func testSearchPassesBiasCoordinateToProvider() async throws {
+        locationService.isAuthorized = true
+        locationService.coordinateToReturn = CLLocationCoordinate2D(latitude: 51.5, longitude: -0.1)
+        let vm2 = MapViewModel(apiClient: client, locationService: locationService, searchProvider: searchProvider)
+        vm2.loadBiasCoordinateIfAuthorized()
+        try await waitUntil { vm2.biasCoordinate != nil }
+        await vm2.search(query: "Cambridge")
+        #expect(searchProvider.queriesReceived.last?.near?.latitude == 51.5)
+        #expect(searchProvider.queriesReceived.last?.near?.longitude == -0.1)
+    }
+
+    /// Proves the side effect moved out of `init`: constructing a
+    /// `MapViewModel` with an already-authorized location service must not,
+    /// on its own, populate `biasCoordinate` — only an explicit
+    /// `loadBiasCoordinateIfAuthorized()` call should trigger the fetch.
+    /// This guards against the GPS-fetch-on-every-discarded-reconstruction
+    /// bug `MapView` previously had via `@State(initialValue:)`.
+    @Test func testInitAloneDoesNotPopulateBiasCoordinateEvenWhenAuthorized() async throws {
+        locationService.isAuthorized = true
+        locationService.coordinateToReturn = CLLocationCoordinate2D(latitude: 51.5, longitude: -0.1)
+        let vm2 = MapViewModel(apiClient: client, locationService: locationService, searchProvider: searchProvider)
+        // Give any errant background work a chance to run before asserting.
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(vm2.biasCoordinate == nil)
+    }
+
+    @Test func testSearchPassesNilNearWhenNoBiasCoordinate() async throws {
+        await vm.search(query: "Cambridge")
+        #expect(searchProvider.queriesReceived.last?.near == nil)
     }
 }

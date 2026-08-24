@@ -36,10 +36,10 @@ struct MapView: View {
     private static let waypointSymbolImage = UIImage(systemName: "mappin.circle.fill")!
         .withRenderingMode(.alwaysTemplate)
 
-    init(apiClient: any APIClientProtocol, locationService: any LocationServiceProtocol, pendingJourney: Binding<Journey?>, pendingPlaceSelection: Binding<PendingPlaceSelection?>) {
+    init(apiClient: any APIClientProtocol, locationService: any LocationServiceProtocol, locationSearchProvider: any LocationSearchProviding, pendingJourney: Binding<Journey?>, pendingPlaceSelection: Binding<PendingPlaceSelection?>) {
         let storedRawValue = UserDefaults.standard.string(forKey: "defaultRoutePlan") ?? RoutePlan.balanced.rawValue
         let initialPlan = RoutePlan(rawValue: storedRawValue) ?? .balanced
-        _vm = State(initialValue: MapViewModel(apiClient: apiClient, locationService: locationService, initialSelectedPlan: initialPlan))
+        _vm = State(initialValue: MapViewModel(apiClient: apiClient, locationService: locationService, searchProvider: locationSearchProvider, initialSelectedPlan: initialPlan))
         _pendingJourney = pendingJourney
         _pendingPlaceSelection = pendingPlaceSelection
     }
@@ -230,6 +230,14 @@ struct MapView: View {
             hasAutoCenteredOnLaunch = true
             guard vm.isLocationAuthorized else { return }
             startTrackingCurrentLocation()
+        }
+        // One-shot bias-coordinate fetch, tied to this view's real lifetime
+        // (not `MapViewModel.init`, which runs on every discarded
+        // reconstruction of the `@State` value — e.g. every tab switch).
+        // `.task` only runs once per view identity, matching that intent
+        // without an extra `@State` guard flag.
+        .task {
+            vm.loadBiasCoordinateIfAuthorized()
         }
     }
 

@@ -35,3 +35,14 @@ extension EnvironmentValues {
         set { self[LocationServiceKey.self] = newValue }
     }
 }
+
+private struct LocationSearchProviderKey: EnvironmentKey {
+    static let defaultValue: any LocationSearchProviding = PhotonLocationSearchProvider()
+}
+
+extension EnvironmentValues {
+    var locationSearchProvider: any LocationSearchProviding {
+        get { self[LocationSearchProviderKey.self] }
+        set { self[LocationSearchProviderKey.self] = newValue }
+    }
+}

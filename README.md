@@ -4,7 +4,7 @@ An iOS app for planning cycle routes using the [CycleStreets](https://www.cycles
 
 ## Features
 
-- Search locations via the CycleStreets geocoder, with live typeahead
+- Search locations via Photon (an OpenStreetMap-data-backed geocoder), with debounced typeahead
 - Plan a route (quietest / balanced / fastest) and view it on the map
 - Turn-by-turn itinerary with distance and duration (metric or imperial)
 - Export a planned route as a GPX file

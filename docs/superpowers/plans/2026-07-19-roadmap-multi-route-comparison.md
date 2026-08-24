@@ -47,6 +47,14 @@ These don't need their own file — captured here for now, split out if/when one
 
 ### Switchable location-search provider (CycleStreets geocoder vs. MapKit)
 
+> **Resolved (2026-08-12):** implemented as a straight replacement using
+> [Photon](https://photon.komoot.io) (OSM-backed), not MapKit — Apple's
+> MapKit terms restrict search-result usage to Apple's own map, which
+> conflicts with this app's existing OSM-tile rendering (GitHub #9), so
+> the MapKit path this section explores was rejected on that basis, not
+> pursued as a dual-provider flag. See `docs/superpowers/specs/2026-08-08-improve-typeahead-design.md`
+> and `docs/superpowers/plans/2026-08-08-improve-typeahead.md`.
+
 **The complaint:** CycleStreets' own v2 geocoder (`Endpoints.geocode`, used by `MapViewModel.search(query:)` for the "search start/end location" flow) gives disappointing results.
 
 **The observation that opens this up:** CycleStreets' journey-planning endpoint only ever consumes raw `lon,lat` coordinates (`itinerarypoints=lon,lat|lon,lat` — see `Endpoints.journeyPlan`), never place names or IDs. So the geocoder is only used to turn a text search into a coordinate for the "from"/"to" markers — it has no other coupling to CycleStreets' routing itself, and could in principle be swapped for *any* provider that can turn a query into a coordinate.

@@ -20,6 +20,8 @@ struct SettingsView: View {
                 LabeledContent("Version", value: Bundle.main.appVersionString)
                 Link("CycleStreets website", destination: URL(string: "https://www.cyclestreets.net")!)
                 Link("GNU GPL License", destination: URL(string: "https://www.gnu.org/licenses/gpl-3.0.html")!)
+                Link("OpenStreetMap data (search)", destination: URL(string: "https://www.openstreetmap.org/copyright")!)
+                Link("Photon geocoder", destination: URL(string: "https://photon.komoot.io")!)
             }
         }
         .navigationTitle("Settings")

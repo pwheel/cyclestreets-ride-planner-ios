@@ -22,14 +22,15 @@ SwiftUI iOS app for planning cycle routes using the CycleStreets API (journey pl
 ## Screens & ViewModels
 
 ### Map (`Features/Map/`)
-The home screen. Search a start/end location (via CycleStreets geocoder, with debounced typeahead), plan a route, view it as a polyline + markers, clear it, or jump to the itinerary.
+The home screen. Search a start/end location (via Photon, an OSM-data-backed geocoder, with debounced typeahead), plan a route, view it as a polyline + markers, clear it, or jump to the itinerary.
 
 - `MapViewModel`: `searchResults`, `fromPlace`/`toPlace`, `routeOptions`, `selectedPlan`, `currentJourney`, `isLoading`, `errorMessage`, `isPresentingLocationPermissionAlert`, `isLocationAuthorized`.
   - `isLocationAuthorized: Bool` — non-prompting proxy for `LocationServiceProtocol.isAuthorized`. `MapView` reads this once on first appearance to decide whether it's safe to auto-center the map without ever triggering the system permission prompt at launch.
   - `useCurrentLocation(as:) -> Place?` — fetches the device's current location via `LocationServiceProtocol` (requesting "when in use" authorization in-context on first use, not at launch) and assigns it to the given `WaypointRole` as a `Place` named literally `"Current Location"` (no reverse geocoding), reusing `selectPlace(_:as:)` so planning/markers/itinerary behave identically to a searched place. Returns the resolved `Place`, or `nil` on any failure — unlike `selectPlace(_:as:)` this operation can fail, so callers must branch on the return value rather than re-reading `fromPlace`/`toPlace` after the `await` (which can't distinguish a fresh assignment from a pre-existing value). `MapView` uses this to advance the From→To picker and recenter the camera **only on success**, so a permission failure doesn't silently retarget the user's retry. On `.permissionDenied`/`.restricted` sets `isPresentingLocationPermissionAlert` instead of `errorMessage`, so the UI can offer a direct link to Settings; `.alreadyInProgress` (a duplicate trigger while a fetch is in flight) is swallowed silently, leaving `isLoading` owned by the first call; other failures set `errorMessage`. This `Place` is deliberately never added to `searchResults`, so it can never be bookmarked into `SavedLocation` storage under a name that goes stale.
   - `centerOnCurrentLocation() -> Bool` — fetches the device's current location purely to recenter the map camera; unlike `useCurrentLocation(as:)`, never touches `fromPlace`/`toPlace` or triggers route planning, and the caller doesn't need the coordinate itself since `MapView` switches the camera into the map frameworks' own follow-user-location tracking mode on success rather than centering on a held point. Same permission/error handling as `useCurrentLocation(as:)` (`isPresentingLocationPermissionAlert` / `errorMessage` / silent `.alreadyInProgress`), reusing the same alerts and `isLoading` overlay — no new UI state.
   - `routeOptions: [RouteOption]` — always 3 entries after a plan attempt (`.quietest, .balanced, .fastest` order), each holding that plan's `journey: Journey?`, `errorMessage: String?`, and computed `failed: Bool` (`journey == nil`) — the single source of truth for "this plan's request failed", used by `MapView`'s legend chip rather than re-deriving it from `journey`/`errorMessage` separately. `currentJourney` is computed from `routeOptions.first { $0.plan == selectedPlan }?.journey` — feeds `ItineraryView`, Save, and GPX export exactly as before.
-  - `search(query:)` — immediate geocode; ignores cancellation errors (a superseded in-flight request from a stale keystroke is not a user-facing error — see `searchTextChanged`).
+  - `search(query:)` — immediate search via `LocationSearchProviding`, biased by `biasCoordinate` when set; ignores cancellation errors (a superseded in-flight request from a stale keystroke is not a user-facing error — see `searchTextChanged`).
+  - `biasCoordinate: CLLocationCoordinate2D?` — best-effort, populated by `loadBiasCoordinateIfAuthorized()` if `locationService.isAuthorized` (never prompts); `nil` until that background fetch completes or if location access isn't already granted, in which case `search(query:)` proceeds unbiased. Deliberately not fired from `init` — `MapView`'s `_vm = State(initialValue:)` runs `MapViewModel.init` on every reconstruction of the view value (e.g. every tab switch), even though `@State` only keeps the first one, so a side effect in `init` would re-fire on every discarded instance. `MapView` instead calls this once from a `.task { }` tied to its own real lifetime.
   - `searchTextChanged(_:)` — debounced (default 300ms, `searchDebounceMilliseconds` is injectable for tests) typeahead; cancels the prior pending search on each new keystroke.
   - `planRoute(from:to:)` — fetches all 3 `RoutePlan`s concurrently (`async let`, one `apiClient.planJourney` call per plan). Per-plan failures are captured in that plan's `RouteOption.errorMessage`, not the shared `errorMessage` (which remains reserved for `search(query:)` failures). If `selectedPlan`'s own request fails but another succeeds, `selectedPlan` auto-falls-back to the first successful plan in `.quietest, .balanced, .fastest` order.
   - `clearRoute()` — resets `routeOptions` to `[]` (plus from/to/search state, as before).
@@ -47,7 +48,7 @@ Turn-by-turn view of a planned `Journey`. `ItineraryViewModel` (plain, not `@Obs
 `SavedLocationsViewModel`: `load()`, `save(name:coordinate:)`, `delete(at:)`. No networking dependency. `SavedLocationsView` rows are tappable; a confirmation dialog picks From/To, then hands the `Place` + role to the Map tab.
 
 ### Settings (`Features/Settings/`)
-`@AppStorage`-backed: `"defaultRoutePlan"` (default `.balanced`) — read by `MapView` at construction to seed `MapViewModel`'s initial `selectedPlan` (which of the 3 always-fetched route plans is pre-selected), not which plan is requested; `"useMetric"` (default `true`). Plus an About section (version, links). A third `@AppStorage` key, `"mapStyle"` (default `MapStyleOption.cyclOSM`), also persists across launches but isn't a Settings-screen toggle — it's read/written directly by `MapView`'s `layersButton`/`MapStyleSheet` picker (see Map screen section above).
+`@AppStorage`-backed: `"defaultRoutePlan"` (default `.balanced`) — read by `MapView` at construction to seed `MapViewModel`'s initial `selectedPlan` (which of the 3 always-fetched route plans is pre-selected), not which plan is requested; `"useMetric"` (default `true`). Plus an About section (version, links — including OpenStreetMap/Photon attribution for the Map screen's search, per GitHub #19). A third `@AppStorage` key, `"mapStyle"` (default `MapStyleOption.cyclOSM`), also persists across launches but isn't a Settings-screen toggle — it's read/written directly by `MapView`'s `layersButton`/`MapStyleSheet` picker (see Map screen section above).
 
 ### GPX Export (`Features/GPX/`)
 `GPXExportButton(journeyID:plan:)` downloads via `apiClient.downloadGPX`, writes to a temp file, presents a `UIActivityViewController` share sheet.
@@ -72,13 +73,40 @@ Reuse this pattern for any future "select something in tab A, act on it in tab B
 - **Bounded authorization wait.** `locationManagerDidChangeAuthorization` deliberately ignores `.notDetermined` callbacks (the system emits them spuriously). Because there is a real state where `.notDetermined` is the *only* callback that will ever arrive — Location Services off device-wide with the app's own status still undetermined — the wait is raced against a 5s timeout task that resumes with `.notDetermined`, which `currentLocation()` maps to `.unavailable`. Keep both the guard and the ceiling.
 - **Error mapping.** `.permissionDenied`/`.restricted` are the "link the user to Settings" cases (including `CLError.denied` from `didFailWithError`, which means Location Services are off system-wide despite an authorized app status). `.notDetermined` and `@unknown default` both map to `.unavailable` — a generic "try again", never a Settings link on a guess.
 
+## Search (`Search/LocationSearchProviding.swift`)
+
+Live typeahead for the Map screen's From/To search, backed by
+[Photon](https://photon.komoot.io) — a public, OSM-data-backed geocoder —
+rather than CycleStreets' own geocoder (GitHub #19 — see
+`docs/superpowers/specs/2026-08-08-improve-typeahead-design.md`: originally
+scoped around Apple MapKit, revised once it became clear Apple's MapKit
+terms restrict search-result usage to Apple's own map, conflicting with
+this app's existing OSM-tile rendering).
+
+`LocationSearchProviding` has a single member: `search(query:near:) async throws -> [Place]`.
+Unlike `LocationServiceProtocol`, it isn't `@MainActor`-isolated — it's a
+stateless, plain async HTTP call, matching `APIClientProtocol`'s own style.
+The `near` parameter, when non-nil, biases (doesn't filter) results toward
+that coordinate.
+
+`PhotonLocationSearchProvider` is the real implementation:
+`PhotonEndpoint.search(query:near:)` builds the request URL
+(`GET https://photon.komoot.io/api/` with `q`, `limit=6`, and `lat`/`lon`
+when biasing), `PhotonGeocoderDecoder.decode(_:)` parses the GeoJSON
+`FeatureCollection` response into `[Place]` (`name` falls back to `street`
+then a literal "Unknown location"; `near` is assembled from
+`city`/`district`/`county`/`state`/`country`, skipping whichever Photon
+omits for a given result). `EnvironmentValues.locationSearchProvider`
+follows the identical DI pattern as `.apiClient`/`.locationService`
+(`App/AppEnvironment.swift`), defaulting to a fresh
+`PhotonLocationSearchProvider()`.
+
 ## Networking — CycleStreets API contract (as verified live, not as originally planned)
 
-`Networking/Endpoints.swift` builds URLs; `Networking/APIClient.swift` fetches + delegates decoding; `APIClientProtocol`: `planJourney(from:to:plan:)`, `geocode(query:)`, `downloadGPX(journeyID:plan:)`, `reloadJourney(itineraryID:plan:)`.
+`Networking/Endpoints.swift` builds URLs; `Networking/APIClient.swift` fetches + delegates decoding; `APIClientProtocol`: `planJourney(from:to:plan:)`, `downloadGPX(journeyID:plan:)`, `reloadJourney(itineraryID:plan:)`. (Geocoding/search moved to `LocationSearchProviding` — see "Search" above; it's no longer part of the CycleStreets API surface.)
 
 - **Journey planning** is v1, not v2: `GET https://www.cyclestreets.net/api/journey.json` with `key`, `plan`, `itinerarypoints=lon,lat|lon,lat`, `reporterrors=1`, `segments=1`. Response is the `marker`/`@attributes` shape with all-string-typed fields and space-separated coordinate strings — decoded by `JourneyPlanDecoder` (not `Codable` directly on `Journey`).
 - **Reload** (re-fetch a previously-planned journey by ID, e.g. for a saved route) uses the same endpoint with `itinerary=<id>` instead of `itinerarypoints`.
-- **Geocoding** is v2: `GET https://api.cyclestreets.net/v2/geocoder` with `key`, `q`, `results=6`, `format=json`. Response is a GeoJSON `FeatureCollection` — decoded by `GeocoderDecoder`, which synthesizes `Place.id` via `UUID()` since the API returns none.
 - **GPX export** is *not* part of the JSON API — it's served from the public website URL namespace (`https://www.cyclestreets.net/journey/<id>/cyclestreets<id><plan>.gpx`), no API key required.
 - No authenticated user session is needed for any of the above — verified live. There is no login/account feature (intentionally descoped — see `docs/superpowers/plans/2026-07-19-uat-findings-v1.md` Finding 2).
 
@@ -98,13 +126,13 @@ Thunderforest tile-provider key follows the identical pattern: `Resources/Thunde
 
 ## Test coverage
 
-`Wheel RoutesTests/`: `Networking/{APIKeyTests, APIClientTests, GeocoderDecoderTests, JourneyPlanDecoderTests, MockAPIClient}`, `Features/{MapViewModelTests, ItineraryViewModelTests, SavedRoutesViewModelTests, MapStyleOptionTests}`, `Models/JourneyTests`, `Persistence/{RouteStoreTests, LocationStoreTests}`, `Location/{MockLocationService}`.
+`Wheel RoutesTests/`: `Networking/{APIKeyTests, APIClientTests, JourneyPlanDecoderTests, MockAPIClient}`, `Features/{MapViewModelTests, ItineraryViewModelTests, SavedRoutesViewModelTests, MapStyleOptionTests}`, `Models/{JourneyTests}`, `Persistence/{RouteStoreTests, LocationStoreTests}`, `Location/{MockLocationService}`, `Search/{PhotonEndpointTests, PhotonGeocoderDecoderTests}`.
 
 **Known gaps** (pure-SwiftUI-wiring or genuinely hard-to-unit-test, treated as build-verify-only per project convention): `SavedLocationsViewModel`, `SettingsView`, `GPXExportButton`, `ItineraryView`, `SavedRoutesView`, `Endpoints`, `MapStyleSheet`, `MapStyleThumbnail`, `LocationService` (the real `CLLocationManager` wrapper — not exercisable via `xcodebuild test` on a simulator without a simulated GPX location).
 
 ## Known limitations / roadmap
 
-Not implemented, captured for future design in `docs/superpowers/plans/2026-07-19-roadmap-multi-route-comparison.md`: switchable geocoder provider (CycleStreets vs MapKit, flag-based), editable saved-location names.
+Not implemented, captured for future design in `docs/superpowers/plans/2026-07-19-roadmap-multi-route-comparison.md`: editable saved-location names.
 
 Simultaneous multi-route comparison (quietest/balanced/fastest shown together) is implemented — see the Map screen section above. Design record: `docs/superpowers/specs/2026-07-25-multi-route-comparison-design.md`; implementation plan: `docs/superpowers/plans/2026-07-25-multi-route-comparison.md`.
 
@@ -113,3 +141,5 @@ OSM tile-based map rendering (GitHub #9) is implemented — see the Map screen s
 "Current Location" as a route waypoint (GitHub #6, route-planning half) is implemented — see the Map screen section above. Design record: `docs/superpowers/specs/2026-07-26-current-location-search-design.md`; implementation plan: `docs/superpowers/plans/2026-08-01-current-location-search.md`.
 
 Map auto-centering and a recenter button (GitHub #6, remaining half) are implemented — see the Map screen section above. Design record: `docs/superpowers/specs/2026-08-02-map-location-centering-design.md`; implementation plan: `docs/superpowers/plans/2026-08-02-map-location-centering.md`.
+
+Location search (GitHub #19) now uses [Photon](https://photon.komoot.io), a public OSM-data-backed geocoder, instead of CycleStreets' own geocoder — a straight replacement, not a flag-based dual-provider system. Originally scoped around Apple MapKit; revised mid-implementation once it became clear Apple's MapKit terms restrict search-result usage to Apple's own map, conflicting with this app's OSM-tile rendering (GitHub #9). Design record: `docs/superpowers/specs/2026-08-08-improve-typeahead-design.md`; implementation plan: `docs/superpowers/plans/2026-08-08-improve-typeahead.md`.

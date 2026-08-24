@@ -52,18 +52,40 @@ final class MapViewModel {
 
     private let apiClient: any APIClientProtocol
     private let locationService: any LocationServiceProtocol
+    private let searchProvider: any LocationSearchProviding
     private var searchDebounceTask: Task<Void, Never>?
 
-    init(apiClient: any APIClientProtocol, locationService: any LocationServiceProtocol, initialSelectedPlan: RoutePlan = .balanced) {
+    /// Best-effort location bias for `search(query:)`, populated by
+    /// `loadBiasCoordinateIfAuthorized()` if location access is already
+    /// authorized (never prompts). Deliberately not `private` — tests poll
+    /// it directly to know when the background fetch has completed.
+    var biasCoordinate: CLLocationCoordinate2D?
+
+    init(apiClient: any APIClientProtocol, locationService: any LocationServiceProtocol, searchProvider: any LocationSearchProviding, initialSelectedPlan: RoutePlan = .balanced) {
         self.apiClient = apiClient
         self.locationService = locationService
+        self.searchProvider = searchProvider
         self.selectedPlan = initialSelectedPlan
+    }
+
+    /// Best-effort, one-shot: bias search results toward the device's location
+    /// if it's already authorized. Never triggers the permission prompt itself.
+    /// Call this once from the owning view's lifecycle (not from init — init
+    /// runs on every reconstruction of a throwaway MapViewModel value, even
+    /// when @State discards it, so a side effect there would fire repeatedly).
+    func loadBiasCoordinateIfAuthorized() {
+        guard locationService.isAuthorized else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            guard let coordinate = try? await self.locationService.currentLocation() else { return }
+            self.biasCoordinate = coordinate
+        }
     }
 
     func search(query: String) async {
         guard !query.isEmpty else { searchResults = []; return }
         do {
-            searchResults = try await apiClient.geocode(query: query)
+            searchResults = try await searchProvider.search(query: query, near: biasCoordinate)
         } catch {
             // A newer keystroke may have cancelled this in-flight request via
             // searchTextChanged's debounce; that's not a user-facing error.
