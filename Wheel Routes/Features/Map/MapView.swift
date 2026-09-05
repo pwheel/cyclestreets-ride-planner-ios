@@ -278,6 +278,9 @@ struct MapView: View {
             }
         }
         .mapStyle(style)
+        .mapControls {
+            MapCompass()
+        }
         .ignoresSafeArea(edges: .bottom)
         .onTapGesture { isSearchFieldFocused = false }
         // Keep the OSM-path camera in sync with user-driven Apple-map gestures (pan/zoom/rotate),
